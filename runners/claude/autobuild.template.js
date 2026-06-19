@@ -47,6 +47,10 @@ const REVIEW_SCHEMA = {
       properties: { severity: { type: 'string', enum: ['critical', 'high', 'medium'] }, file: { type: 'string' }, issue: { type: 'string' }, fix: { type: 'string' } } } },
   },
 }
+const SETUP_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['worktreePath', 'headSha'],
+  properties: { worktreePath: { type: 'string' }, headSha: { type: 'string' } },
+}
 const DESIGN_SCHEMA = {
   type: 'object', additionalProperties: false, required: ['spec', 'specPath', 'surface', 'chunks', 'escalations'],
   properties: {
@@ -89,9 +93,11 @@ ctx.specPath = specPath
 // SETUP (create worktree, commit spec)
 phase('setup')
 const setup = await agent(
-  `${RULES}\n\nPrepare ${T.key}. git fetch origin. Create a fresh git WORKTREE for branch "${T.branch}" off "origin/${BASE}" (git worktree add -b ${T.branch} <path> origin/${BASE}). The approved design spec is at "${specPath}"; ensure it is committed on this branch. Run the install command if deps are missing. Report the absolute worktree path and HEAD sha. Do NOT implement.`,
-  { label: `${T.key} setup`, phase: 'setup', model: 'haiku', agentType: 'claude' }
+  `${RULES}\n\nPrepare ${T.key}. git fetch origin. Create a fresh git WORKTREE for branch "${T.branch}" off "origin/${BASE}" (git worktree add -b ${T.branch} <path> origin/${BASE}). The approved design spec is at "${specPath}"; ensure it is committed on this branch. Run the install command if deps are missing. Return the absolute worktree path (worktreePath) and HEAD sha (headSha). Do NOT implement.`,
+  { label: `${T.key} setup`, phase: 'setup', model: 'haiku', agentType: 'claude', schema: SETUP_SCHEMA }
 )
+
+if (!setup) return { key: T.key, branch: T.branch, specPath, verdict: 'blocked', findings: [{ issue: 'setup agent errored' }] }
 
 // IMPLEMENT (sequential, model per chunk)
 phase('implement')
@@ -126,6 +132,6 @@ while (round <= MAX_FIX_ROUNDS) {
 
 return {
   key: T.key, branch: T.branch,
-  worktreePath: (setup && typeof setup === 'string') ? setup : null,
+  worktreePath: setup.worktreePath,
   specPath, verdict: clean ? 'clean' : 'blocked', findings: clean ? [] : lastBlocking,
 }
