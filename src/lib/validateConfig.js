@@ -2,8 +2,10 @@ const fs = require('fs')
 const path = require('path')
 const Ajv = require('ajv')
 
+const schemaNeighbor = path.join(__dirname, 'config.schema.json')
+const schemaParent = path.join(__dirname, '..', 'config.schema.json')
 const schema = JSON.parse(
-  fs.readFileSync(path.join(__dirname, '..', 'config.schema.json'), 'utf8')
+  fs.readFileSync(fs.existsSync(schemaNeighbor) ? schemaNeighbor : schemaParent, 'utf8')
 )
 const ajv = new Ajv({ allErrors: true })
 const validate = ajv.compile(schema)

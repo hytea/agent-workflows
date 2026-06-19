@@ -13,7 +13,7 @@ export const meta = {
 const A = (typeof args === 'string' ? JSON.parse(args) : args) || {}
 const CFG = A.config || {}
 const T = A.ticket || {}
-const AUTONOMOUS = !!A.autonomous
+const AUTONOMOUS = !!A.autonomous // reserved: consumed by the autonomous supervisor (follow-up plan)
 const BASE = CFG.base
 const TC = CFG.toolchain || {}
 const CAPS = CFG.caps || {}
@@ -25,7 +25,6 @@ if (!T.key || !BASE) {
 const testCmd = TC.test || ''
 const lintCmd = TC.lint || ''
 const buildCmd = TC.build || ''
-const checks = ['build', 'test', 'lint', 'format'].map((k) => TC[k]).filter(Boolean).join(' && ')
 
 // RULES: assembled from config + the consumer's autobuild.md (passed in A.profile).
 const PROFILE = A.profile || ''

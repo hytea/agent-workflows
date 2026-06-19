@@ -1,6 +1,6 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/hytea/agent-workflows/src/config.schema.json",
+  "$comment": "No $schema declared: validated with ajv default (draft-07). If you add draft-2020-12 keywords, switch validateConfig to require('ajv/dist/2020').",
   "title": "autobuild.config",
   "description": "Per-repo policy for the autobuild workflow. Lives at .claude/autobuild.config.json in each consuming repo.",
   "type": "object",

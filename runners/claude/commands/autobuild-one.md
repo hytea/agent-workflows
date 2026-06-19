@@ -8,7 +8,11 @@ Drive one ticket through the autobuild engine, interactively. You do the judgmen
 
 ## Steps
 
-1. **Load config.** Read `.claude/autobuild.config.json` in the repo root and `.claude/autobuild.md` (conventions prose). If the config is missing or fails schema validation, stop and tell the user.
+1. **Load and validate config.** Read `.claude/autobuild.config.json` in the repo root and `.claude/autobuild.md` (conventions prose). Validate the config via the shipped validator — run:
+   ```
+   node -e "const{validateConfig}=require('<plugin>/lib/validateConfig');console.log(JSON.stringify(validateConfig(require('<cwd>/.claude/autobuild.config.json'))))"
+   ```
+   where `<plugin>` is the absolute path to this plugin's directory and `<cwd>` is the repo root. If `valid` is `false`, stop and print the `errors` array to the user. If the config file is missing, stop and tell the user.
 2. **Resolve the ticket.** From the argument (a ticket key or epic key), run the config's `ticket.show` command to read it. If it's an epic, expand to children and confirm order with the user.
 3. **Run the engine.** Invoke `Workflow({ name: 'autobuild', args })` with `args = { config, profile: <autobuild.md text>, ticket: { key, branch: '<key-lowercase>-<slug>', ticketText: <the ticket body> }, autonomous: false }`.
 4. **Handle escalations.** If the result `verdict` is `blocked` with `escalations`, surface ONLY those to the user via the question tool (lead with the recommended option), fold answers into guidance, and re-run.

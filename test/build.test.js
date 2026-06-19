@@ -16,3 +16,14 @@ test('build produces the expected plugin structure', () => {
     assert.ok(fs.existsSync(path.join(distDir, f)), `missing ${f}`)
   }
 })
+
+test('build ships config schema and validator into plugin lib/', () => {
+  const { distDir } = build({ local: true })
+  const must = [
+    'plugins/autobuild/lib/config.schema.json',
+    'plugins/autobuild/lib/validateConfig.js',
+  ]
+  for (const f of must) {
+    assert.ok(fs.existsSync(path.join(distDir, f)), `missing ${f}`)
+  }
+})
