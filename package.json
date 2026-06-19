@@ -1,0 +1,13 @@
+{
+  "name": "agent-workflows",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "build": "node build/build.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1"
+  }
+}
