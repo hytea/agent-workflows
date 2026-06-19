@@ -1,18 +1,22 @@
 const test = require('node:test')
 const assert = require('node:assert')
 const fs = require('fs')
+const os = require('os')
 const path = require('path')
 const { build } = require('../build/build')
 
+// Each test builds into its own temp dir so parallel test files never race on a shared dist.
+const tmp = (name) => fs.mkdtempSync(path.join(os.tmpdir(), `autobuild-${name}-`))
+
 test('built engine has no unreplaced prompt markers', () => {
-  const { distDir } = build({ local: true })
+  const { distDir } = build({ outDir: tmp('markers') })
   const engine = fs.readFileSync(path.join(distDir, 'plugins/autobuild/workflows/autobuild.js'), 'utf8')
   assert.ok(!engine.includes('/*__PROMPT:'), 'unreplaced prompt marker remains')
   assert.match(engine, /Adversarially CODE-review/)  // prompt text inlined
 })
 
 test('built engine is syntactically valid as a workflow async-body', () => {
-  const { distDir } = build({ local: true })
+  const { distDir } = build({ outDir: tmp('syntax') })
   const src = fs.readFileSync(path.join(distDir, 'plugins/autobuild/workflows/autobuild.js'), 'utf8')
   const body = src.replace(/^export\s+const\s+meta/, 'const meta')
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor

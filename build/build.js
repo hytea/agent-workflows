@@ -28,8 +28,8 @@ function buildEngine() {
   return src
 }
 
-function build({ local } = {}) {
-  const distDir = path.join(ROOT, local ? 'dist-local' : 'dist')
+function build({ local, outDir } = {}) {
+  const distDir = outDir ? path.resolve(outDir) : path.join(ROOT, local ? 'dist-local' : 'dist')
   rmrf(distDir)
   // marketplace manifest
   cp(path.join(ROOT, 'build', 'marketplace.template.json'), path.join(distDir, '.claude-plugin', 'marketplace.json'))
