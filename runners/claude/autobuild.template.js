@@ -29,7 +29,7 @@ const checks = ['build', 'test', 'lint', 'format'].map((k) => TC[k]).filter(Bool
 
 // RULES: assembled from config + the consumer's autobuild.md (passed in A.profile).
 const PROFILE = A.profile || ''
-const noPush = CFG.pushAllowed ? '' : ' NEVER run "git push".'
+const noPush = CFG.pushAllowed ? '' : ' Do not push commits to any remote.'
 const RULES = [
   `Operate ONLY inside the assigned worktree (absolute paths or git -C). Base branch: ${BASE}.`,
   `Toolchain: install="${TC.install || ''}", build="${buildCmd}", test="${testCmd}", lint="${lintCmd}".`,
