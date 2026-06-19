@@ -50,6 +50,23 @@ const SETUP_SCHEMA = {
   type: 'object', additionalProperties: false, required: ['worktreePath', 'headSha'],
   properties: { worktreePath: { type: 'string' }, headSha: { type: 'string' } },
 }
+// Forces the implementer to report observed red→green evidence so the engine
+// can mechanically reject chunks where the failing-test-first phase was skipped
+// or the test did not actually discriminate the change (red exit was 0).
+const IMPLEMENT_SCHEMA = {
+  type: 'object', additionalProperties: false,
+  required: ['testFile', 'redCommand', 'redExitCode', 'redFailureMessage', 'greenCommand', 'greenExitCode', 'committed'],
+  properties: {
+    testFile: { type: 'string' },
+    redCommand: { type: 'string' },
+    redExitCode: { type: 'integer' },
+    redFailureMessage: { type: 'string' },
+    greenCommand: { type: 'string' },
+    greenExitCode: { type: 'integer' },
+    lintExitCode: { type: 'integer' },
+    committed: { type: 'boolean' },
+  },
+}
 const DESIGN_SCHEMA = {
   type: 'object', additionalProperties: false, required: ['spec', 'specPath', 'surface', 'chunks', 'escalations'],
   properties: {
@@ -98,13 +115,32 @@ const setup = await agent(
 
 if (!setup) return { key: T.key, branch: T.branch, specPath, verdict: 'blocked', findings: [{ issue: 'setup agent errored' }] }
 
-// IMPLEMENT (sequential, model per chunk)
+// IMPLEMENT (sequential, model per chunk). Each chunk reports red→green
+// evidence; the engine gates on a real red phase so a non-discriminating test
+// (passes with and without the fix) cannot slip through as "TDD done".
 phase('implement')
+const enforceRed = !!testCmd // no test command configured => nothing to gate
 for (const c of chunks) {
-  await agent(
+  const impl = await agent(
     fill(/*__PROMPT:implement__*/, { ...ctx, chunkId: c.id, chunkTitle: c.title, chunkFiles: (c.files || []).join(', '), chunkInstructions: c.instructions }),
-    { label: `${T.key} ${c.id}: ${c.title}`, phase: 'implement', model: c.model || 'sonnet', agentType: 'claude' }
+    { label: `${T.key} ${c.id}: ${c.title}`, phase: 'implement', model: c.model || 'sonnet', agentType: 'claude', schema: enforceRed ? IMPLEMENT_SCHEMA : undefined }
   )
+  if (!impl) return { key: T.key, branch: T.branch, specPath, worktreePath: setup.worktreePath, verdict: 'blocked', findings: [{ issue: `implement agent errored on chunk ${c.id}` }] }
+  if (enforceRed) {
+    const redOk = Number.isInteger(impl.redExitCode) && impl.redExitCode !== 0
+    const greenOk = impl.greenExitCode === 0
+    if (!redOk || !greenOk || !impl.committed) {
+      log(`${T.key} ${c.id}: TDD gate failed (red=${impl.redExitCode}, green=${impl.greenExitCode}, committed=${impl.committed})`)
+      return {
+        key: T.key, branch: T.branch, specPath, worktreePath: setup.worktreePath, verdict: 'blocked',
+        findings: [{
+          severity: 'high', file: impl.testFile || (c.files || [])[0] || '',
+          issue: `TDD red phase not satisfied for chunk ${c.id}: the test did not fail before implementation (red exit ${impl.redExitCode}, green exit ${impl.greenExitCode}, committed ${impl.committed}). A test that passes without the change does not discriminate the fix.`,
+          fix: 'Make the test fail without the implementation (usually the mock/fixture is too permissive), prove red, then re-implement.',
+        }],
+      }
+    }
+  }
 }
 
 // REVIEW + FIX loop

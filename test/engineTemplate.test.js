@@ -25,3 +25,11 @@ test('template defines a REVIEW_SCHEMA and uses parallel for reviews', () => {
   assert.match(src, /REVIEW_SCHEMA/)
   assert.match(src, /await parallel\(/)
 })
+
+test('template enforces a TDD red-phase gate on implement chunks', () => {
+  assert.match(src, /IMPLEMENT_SCHEMA/, 'must define an implement schema capturing red/green evidence')
+  assert.match(src, /redExitCode/, 'must capture the red-phase exit code')
+  // Gate must block when the red phase did not actually fail (exit 0).
+  assert.match(src, /redOk[\s\S]*redExitCode !== 0/, 'must require a non-zero red exit')
+  assert.match(src, /enforceRed = !!testCmd/, 'gate must be skipped when no test command is configured')
+})

@@ -1,21 +1,58 @@
 const fs = require('fs')
 const path = require('path')
-const Ajv = require('ajv')
 
 const schemaNeighbor = path.join(__dirname, 'config.schema.json')
 const schemaParent = path.join(__dirname, '..', 'config.schema.json')
 const schema = JSON.parse(
   fs.readFileSync(fs.existsSync(schemaNeighbor) ? schemaNeighbor : schemaParent, 'utf8')
 )
-const ajv = new Ajv({ allErrors: true })
-const validate = ajv.compile(schema)
+
+// Zero-dependency validator for the autobuild config schema subset.
+// Supports the keywords this schema actually uses: type (object/string/
+// integer/boolean), required, properties, additionalProperties:false, enum.
+// Deliberately NOT a general JSON Schema engine — keeping it dependency-free
+// means the shipped plugin validates from any consumer repo without ajv on the
+// module resolution path. If the schema grows new keywords, extend checkNode.
+function typeOk(value, type) {
+  switch (type) {
+    case 'object': return value !== null && typeof value === 'object' && !Array.isArray(value)
+    case 'array': return Array.isArray(value)
+    case 'string': return typeof value === 'string'
+    case 'boolean': return typeof value === 'boolean'
+    case 'integer': return typeof value === 'number' && Number.isInteger(value)
+    case 'number': return typeof value === 'number'
+    default: return true
+  }
+}
+
+function checkNode(value, node, instancePath, errors) {
+  if (node.type && !typeOk(value, node.type)) {
+    errors.push(`${instancePath || '(root)'} must be ${node.type}`)
+    return // type is wrong; deeper checks would be noise
+  }
+  if (node.enum && !node.enum.includes(value)) {
+    errors.push(`${instancePath || '(root)'} must be one of ${JSON.stringify(node.enum)}`)
+  }
+  if (node.type === 'object' && value && typeof value === 'object' && !Array.isArray(value)) {
+    const props = node.properties || {}
+    for (const key of node.required || []) {
+      if (!(key in value)) errors.push(`${instancePath || '(root)'} missing required property '${key}'`)
+    }
+    if (node.additionalProperties === false) {
+      for (const key of Object.keys(value)) {
+        if (!(key in props)) errors.push(`${instancePath || '(root)'} has unknown property '${key}'`)
+      }
+    }
+    for (const [key, childSchema] of Object.entries(props)) {
+      if (key in value) checkNode(value[key], childSchema, `${instancePath}/${key}`, errors)
+    }
+  }
+}
 
 function validateConfig(config) {
-  const valid = validate(config)
-  const errors = valid ? [] : (validate.errors || []).map(
-    (e) => `${e.instancePath || '(root)'} ${e.message}`
-  )
-  return { valid: !!valid, errors }
+  const errors = []
+  checkNode(config, schema, '', errors)
+  return { valid: errors.length === 0, errors }
 }
 
 module.exports = { validateConfig }

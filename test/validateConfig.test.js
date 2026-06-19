@@ -27,3 +27,21 @@ test('rejects unknown vcs mode', () => {
   const r = validateConfig(bad)
   assert.strictEqual(r.valid, false)
 })
+
+test('rejects an unknown top-level property (additionalProperties:false)', () => {
+  const bad = { ...good, surprise: true }
+  const r = validateConfig(bad)
+  assert.strictEqual(r.valid, false)
+})
+
+test('rejects a wrong-typed property', () => {
+  const bad = { ...good, base: 42 }
+  const r = validateConfig(bad)
+  assert.strictEqual(r.valid, false)
+})
+
+test('rejects a missing nested required ticket field', () => {
+  const bad = { ...good, ticket: { ...good.ticket } }; delete bad.ticket.show
+  const r = validateConfig(bad)
+  assert.strictEqual(r.valid, false)
+})
