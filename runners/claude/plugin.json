@@ -1,0 +1,8 @@
+{
+  "name": "autobuild",
+  "version": "0.1.0",
+  "description": "Multi-agent ticket autobuild: design, TDD implement, adversarial review, supervisor-gated merge. Repo-agnostic; configured per repo via .claude/autobuild.config.json.",
+  "author": { "name": "hytea" },
+  "repository": "https://github.com/hytea/agent-workflows",
+  "keywords": ["claude-code", "workflow", "automation", "tickets", "multi-agent"]
+}
