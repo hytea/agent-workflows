@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hytea/agent-workflows/src/config.schema.json",
+  "title": "autobuild.config",
+  "description": "Per-repo policy for the autobuild workflow. Lives at .claude/autobuild.config.json in each consuming repo.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["base", "ticket", "vcs", "toolchain", "labels"],
+  "properties": {
+    "base": {
+      "type": "string",
+      "description": "Base branch worktrees branch off and the supervisor merges into (e.g. development)."
+    },
+    "pushAllowed": {
+      "type": "boolean",
+      "default": false,
+      "description": "If false, no agent or supervisor may git push. Local merges only (no CI/CD trigger)."
+    },
+    "ticket": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Ticket-system adapter. Command templates with {placeholder} substitution.",
+      "required": ["system", "ready", "show", "claim", "note", "label"],
+      "properties": {
+        "system": { "type": "string", "description": "Adapter id, e.g. bd | jira | linear." },
+        "ready":  { "type": "string", "description": "List ready work. Placeholders: {readyLabel}." },
+        "show":   { "type": "string", "description": "Show one ticket. Placeholders: {key}." },
+        "claim":  { "type": "string", "description": "Atomically claim a ticket. Placeholders: {key}." },
+        "note":   { "type": "string", "description": "Append a note. Placeholders: {key} {text}." },
+        "label":  { "type": "string", "description": "Add a label. Placeholders: {key} {label}." },
+        "close":  { "type": "string", "description": "Close a ticket. Placeholders: {key}." },
+        "syncPull": { "type": "string", "description": "Pull ticket state (optional, e.g. bd dolt pull)." },
+        "syncPush": { "type": "string", "description": "Push ticket state (optional, e.g. bd dolt push)." }
+      }
+    },
+    "vcs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["local-merge", "gh-pr", "glab-mr"],
+          "description": "How the merge barrier integrates reviewed work. Only local-merge implemented initially."
+        }
+      }
+    },
+    "toolchain": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Shell commands. Any may be empty string to skip.",
+      "properties": {
+        "install":   { "type": "string" },
+        "build":     { "type": "string" },
+        "test":      { "type": "string" },
+        "lint":      { "type": "string" },
+        "format":    { "type": "string" },
+        "formatFix": { "type": "string" }
+      }
+    },
+    "labels": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ready", "parked"],
+      "properties": {
+        "ready":  { "type": "string", "description": "Tag marking a ticket ready for autonomous build." },
+        "parked": { "type": "string", "description": "Tag the supervisor applies when parking a ticket for human attention." }
+      }
+    },
+    "ui": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Rendered UI-review settings. Omit if the repo has no renderable frontend.",
+      "properties": {
+        "devServerPortBase": { "type": "integer", "description": "First port for per-worktree dev servers; wave index is added." },
+        "appGlob": { "type": "string", "description": "Glob whose diff hits trigger the UI reviewer, e.g. apps/web/**." },
+        "devServerCmd": { "type": "string", "description": "Command to start the dev server. Placeholders: {port}." }
+      }
+    },
+    "brandGuidePath": {
+      "type": "string",
+      "description": "Path to a brand/style guide doc the UI reviewer and implementers consult."
+    },
+    "caps": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "concurrency":      { "type": "integer", "default": 4, "description": "Max tickets built in parallel per wave." },
+        "maxFixRounds":     { "type": "integer", "default": 2, "description": "Max review->fix rounds before parking." },
+        "maxTicketsPerRun": { "type": "integer", "default": 20, "description": "Hard cap on tickets per autonomous run." }
+      }
+    }
+  }
+}

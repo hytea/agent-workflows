@@ -1,0 +1,32 @@
+{
+  "base": "development",
+  "pushAllowed": false,
+  "ticket": {
+    "system": "bd",
+    "ready":  "bd ready --label {readyLabel} --json",
+    "show":   "bd show {key} --json",
+    "claim":  "bd update {key} --claim",
+    "note":   "bd update {key} --append-notes {text}",
+    "label":  "bd update {key} --add-label {label}",
+    "close":  "bd close {key}",
+    "syncPull": "bd dolt pull",
+    "syncPush": "bd dolt push"
+  },
+  "vcs": { "mode": "local-merge" },
+  "toolchain": {
+    "install": "npm install",
+    "build":   "npm run build",
+    "test":    "npm run test",
+    "lint":    "npm run lint",
+    "format":  "",
+    "formatFix": ""
+  },
+  "labels": { "ready": "ready-to-build", "parked": "needs-human" },
+  "ui": {
+    "devServerPortBase": 4100,
+    "appGlob": "apps/web/**",
+    "devServerCmd": "npm run dev -w apps/web -- --port {port}"
+  },
+  "brandGuidePath": ".claude/skills/frontend-design/brand-guide.md",
+  "caps": { "concurrency": 4, "maxFixRounds": 2, "maxTicketsPerRun": 20 }
+}
