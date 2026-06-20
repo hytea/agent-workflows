@@ -18,13 +18,11 @@ function quote(text) {
 function buildTemplate(tplRelPath, markerNames) {
   const tplPath = path.join(ROOT, tplRelPath)
   let src = fs.readFileSync(tplPath, 'utf8')
-  const prompts = loadPrompts()
-  const map = {
-    design: prompts.design, implement: prompts.implement,
-    codeReview: prompts.codeReview, securityReview: prompts.securityReview,
-    designConformance: prompts.designConformance,
-  }
+  // loadPrompts() returns every prompt keyed by name, so it IS the marker map —
+  // a new prompt never needs a build.js edit, only a loadPrompts FILES entry.
+  const map = loadPrompts()
   for (const name of markerNames) {
+    if (!(name in map)) throw new Error(`buildTemplate: no prompt for marker '${name}'`)
     src = src.split(`/*__PROMPT:${name}__*/`).join(quote(map[name]))
   }
   return src
@@ -49,7 +47,7 @@ function build({ local, outDir } = {}) {
   cp(path.join(ROOT, 'src', 'lib', 'packWave.js'), path.join(distDir, 'plugins', 'autobuild', 'lib', 'packWave.js'))
   cp(path.join(ROOT, 'src', 'lib', 'rateLimit.js'), path.join(distDir, 'plugins', 'autobuild', 'lib', 'rateLimit.js'))
   // autobuild engine (all markers replaced)
-  const engine = buildTemplate('runners/claude/autobuild.template.js', ['design', 'implement', 'codeReview', 'securityReview', 'designConformance'])
+  const engine = buildTemplate('runners/claude/autobuild.template.js', ['design', 'implement', 'codeReview', 'securityReview', 'designConformance', 'uiReview'])
   const enginePath = path.join(distDir, 'plugins', 'autobuild', 'workflows', 'autobuild.js')
   mkdirp(path.dirname(enginePath))
   fs.writeFileSync(enginePath, engine)

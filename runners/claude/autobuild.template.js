@@ -17,7 +17,14 @@ const AUTONOMOUS = !!A.autonomous // reserved: consumed by the autonomous superv
 const BASE = CFG.base
 const TC = CFG.toolchain || {}
 const CAPS = CFG.caps || {}
+const UI = CFG.ui || {}
 const MAX_FIX_ROUNDS = Number.isInteger(CAPS.maxFixRounds) ? CAPS.maxFixRounds : 2
+// UI review runs only when the repo declares a renderable frontend (ui config
+// with a dev-server command) AND the change touches the app glob. The port is
+// the configured base plus an optional caller-supplied wave index so parallel
+// worktrees never bind the same port.
+const uiConfigured = !!(UI.devServerCmd && UI.appGlob)
+const uiPort = (Number.isInteger(UI.devServerPortBase) ? UI.devServerPortBase : 4100) + (Number.isInteger(A.waveIndex) ? A.waveIndex : 0)
 if (!T.key || !BASE) {
   return { error: 'autobuild requires args.config.base and args.ticket.key', got: { base: BASE, key: T.key } }
 }
@@ -126,6 +133,9 @@ if (!setup) return { key: T.key, branch: T.branch, specPath, verdict: 'blocked',
 // scoped to it (git -C {worktreePath}); otherwise an agent that does not cd into
 // the worktree commits to the ambient branch (the base branch), leaking work.
 ctx.worktreePath = setup.worktreePath
+// UI-review context (consumed only when the UI reviewer runs).
+ctx.uiPort = uiPort
+ctx.devServerCmd = (UI.devServerCmd || '').replace('{port}', String(uiPort))
 
 // IMPLEMENT (sequential, model per chunk). Each chunk reports red→green
 // evidence; the engine gates on a real red phase so a non-discriminating test
@@ -160,17 +170,40 @@ for (const c of chunks) {
   }
 }
 
+// UI-TOUCH DETECTION: the rendered UI reviewer runs only when the repo declares
+// a renderable frontend (ui config) AND this change touches the app glob. The
+// workflow cannot run git itself, so a cheap agent reports the diff verdict once.
+let touchesUI = false
+if (uiConfigured) {
+  const det = await agent(
+    `${RULES}\n\nIn the worktree at "${setup.worktreePath}", run: git -C "${setup.worktreePath}" diff --name-only ${BASE}...${T.branch}. Does ANY changed path match the glob "${UI.appGlob}"? Answer strictly via the schema.`,
+    { label: `${T.key} ui-detect`, phase: 'review', model: 'haiku', agentType: 'claude', schema: { type: 'object', additionalProperties: false, required: ['touchesUI'], properties: { touchesUI: { type: 'boolean' } } } }
+  )
+  touchesUI = !!(det && det.touchesUI)
+  if (touchesUI) log(`${T.key}: change touches ${UI.appGlob} → UI review enabled (port ${uiPort})`)
+}
+
 // REVIEW + FIX loop
 let round = 0, clean = false, lastBlocking = []
 while (round <= MAX_FIX_ROUNDS) {
   phase('review')
-  const [code, sec, conf] = await parallel([
+  // Code/security/design-conformance always run. The rendered UI reviewer is
+  // appended only for UI-touching changes; it renders the page via Playwright
+  // on the allocated port. A reviewer that errors returns null → treated as
+  // NOT clean (never a silent pass).
+  const reviewers = [
     () => agent(fill(/*__PROMPT:codeReview__*/, ctx), { label: `${T.key} code r${round}`, phase: 'review', model: 'opus', agentType: 'claude', schema: REVIEW_SCHEMA }),
     () => agent(fill(/*__PROMPT:securityReview__*/, ctx), { label: `${T.key} sec r${round}`, phase: 'review', model: 'opus', agentType: 'claude', schema: REVIEW_SCHEMA }),
     () => agent(fill(/*__PROMPT:designConformance__*/, ctx), { label: `${T.key} conf r${round}`, phase: 'review', model: 'opus', agentType: 'claude', schema: REVIEW_SCHEMA }),
-  ])
-  const allReturned = code && sec && conf
-  const blocking = [...((code && code.blocking) || []), ...((sec && sec.blocking) || []), ...((conf && conf.blocking) || [])]
+  ]
+  if (touchesUI) {
+    reviewers.push(() => agent(fill(/*__PROMPT:uiReview__*/, ctx), { label: `${T.key} ui r${round}`, phase: 'review', model: 'opus', agentType: 'claude', schema: REVIEW_SCHEMA }))
+  }
+  const reviews = await parallel(reviewers)
+  const [code, sec, conf] = reviews
+  const ui = touchesUI ? reviews[3] : true // non-UI tickets have no UI reviewer to satisfy
+  const allReturned = code && sec && conf && ui
+  const blocking = reviews.flatMap((r) => (r && r.blocking) || [])
   lastBlocking = blocking
   if (blocking.length === 0 && allReturned) { clean = true; break }
   if (round === MAX_FIX_ROUNDS) { log(`${T.key}: ${blocking.length} blocking after ${round} rounds (or a reviewer errored)`); break }

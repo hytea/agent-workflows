@@ -35,3 +35,10 @@ test('both workflows carry the destructive-operation guardrail', () => {
     assert.match(src, /DESTRUCTIVE-OPERATION GUARDRAIL/, `${wf} missing destructive-operation guardrail`)
   }
 })
+
+test('built engine inlines the rendered UI-review prompt and gates it conditionally', () => {
+  const { distDir } = build({ outDir: tmp('uireview') })
+  const src = fs.readFileSync(path.join(distDir, 'plugins/autobuild/workflows/autobuild.js'), 'utf8')
+  assert.match(src, /RENDERED UI review/, 'UI-review prompt not inlined into engine')
+  assert.match(src, /touchesUI/, 'UI reviewer must be conditional on a UI-touch check')
+})

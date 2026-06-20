@@ -1065,7 +1065,7 @@ These are deferred to live human validation because they exercise real `bd` stat
 
 ## Deferred (explicitly NOT in this plan)
 
-- **Rendered UI review via Playwright** (the conditional `apps/web` UI reviewer + per-wave dev-server port allocation) — its own follow-up plan (Plan 4). The engine's review fan-out stays code+security+conformance here.
+- ~~**Rendered UI review via Playwright**~~ — NOW IMPLEMENTED (post-plan). The engine's review fan-out conditionally appends a Playwright UI reviewer when the diff touches `config.ui.appGlob`: it background-launches the worktree dev server on `config.ui.devServerPortBase` (+ optional `args.waveIndex`), renders affected pages, inspects layout/clipping/overflow/brand, then tears the server down. Prompt: `src/prompts/ui-review.md`. Cross-wave serialization of the shared browser remains a supervisor concern.
 - **Playwright auto-scrape of the rate-limit anchor** — author-paste only for now; scrape is a documented future extension.
 - **`vcs.mode` adapters beyond `local-merge`** (`gh-pr`, `glab-mr`) — deferred until a second consumer needs them.
 - **Backlog-groomer / queue-filler workflows** — the `autodesign` workflow is the reusable seam they will build on, but they are out of scope here.
