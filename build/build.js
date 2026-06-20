@@ -51,6 +51,9 @@ function build({ local, outDir } = {}) {
   const autodesign = buildTemplate('runners/claude/autodesign.template.js', ['design'])
   const autodesignPath = path.join(distDir, 'plugins', 'autobuild', 'workflows', 'autodesign.js')
   fs.writeFileSync(autodesignPath, autodesign)
+  // supervisor workflow (no prompt markers — pure orchestration)
+  const supervisor = buildTemplate('runners/claude/autobuild-supervisor.template.js', [])
+  fs.writeFileSync(path.join(distDir, 'plugins', 'autobuild', 'workflows', 'autobuild-supervisor.js'), supervisor)
   return { distDir }
 }
 

@@ -40,3 +40,12 @@ test('build ships the autodesign workflow with design prompt inlined', () => {
   assert.ok(!src.includes('/*__PROMPT:'), 'unreplaced prompt marker in autodesign.js')
   assert.match(src, /Design ticket/) // text from design.md is inlined
 })
+
+test('build ships the supervisor workflow', () => {
+  const { distDir } = build({ outDir: tmp('supervisor') })
+  const p = path.join(distDir, 'plugins/autobuild/workflows/autobuild-supervisor.js')
+  assert.ok(fs.existsSync(p), 'missing autobuild-supervisor.js')
+  const src = fs.readFileSync(p, 'utf8')
+  assert.match(src, /name: 'autobuild-supervisor'/)
+  assert.ok(!src.includes('/*__PROMPT:'), 'supervisor should have no prompt markers')
+})
