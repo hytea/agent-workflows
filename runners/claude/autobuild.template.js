@@ -110,11 +110,16 @@ ctx.specPath = specPath
 // SETUP (create worktree, commit spec)
 phase('setup')
 const setup = await agent(
-  `${RULES}\n\nPrepare ${T.key}. git fetch origin. Create a fresh git WORKTREE for branch "${T.branch}" off "origin/${BASE}" (git worktree add -b ${T.branch} <path> origin/${BASE}). The approved design spec is at "${specPath}"; ensure it is committed on this branch. Run the install command if deps are missing. Return the absolute worktree path (worktreePath) and HEAD sha (headSha). Do NOT implement.`,
+  `${RULES}\n\nPrepare ${T.key}. git fetch origin. Create a fresh git WORKTREE for branch "${T.branch}" off "origin/${BASE}" (git worktree add -b ${T.branch} <path> origin/${BASE}). The approved design spec was written to "${specPath}" but is NOT yet committed (it may be an uncommitted file in the current checkout, which the new worktree cannot see). Ensure the spec exists INSIDE the worktree at the same relative path (copy it in if absent) and commit it there on "${T.branch}" with message "docs(${T.key}): design spec" — use git -C <worktreePath> for every git command so nothing lands on the base branch. Run the install command if deps are missing. Return the absolute worktree path (worktreePath) and HEAD sha (headSha). Do NOT implement.`,
   { label: `${T.key} setup`, phase: 'setup', model: 'haiku', agentType: 'claude', schema: SETUP_SCHEMA }
 )
 
 if (!setup) return { key: T.key, branch: T.branch, specPath, verdict: 'blocked', findings: [{ issue: 'setup agent errored' }] }
+// All subsequent agents (implement/review/fix) operate INSIDE the worktree.
+// Thread its absolute path into the prompt context so every git command can be
+// scoped to it (git -C {worktreePath}); otherwise an agent that does not cd into
+// the worktree commits to the ambient branch (the base branch), leaking work.
+ctx.worktreePath = setup.worktreePath
 
 // IMPLEMENT (sequential, model per chunk). Each chunk reports red→green
 // evidence; the engine gates on a real red phase so a non-discriminating test
@@ -165,7 +170,7 @@ while (round <= MAX_FIX_ROUNDS) {
   if (round === MAX_FIX_ROUNDS) { log(`${T.key}: ${blocking.length} blocking after ${round} rounds (or a reviewer errored)`); break }
   phase('fix')
   await agent(
-    `${RULES}\n\nFix these BLOCKING review findings for ${T.key} on branch "${T.branch}", commit (relevant files only). Re-run the test and lint commands until green. Findings:\n${JSON.stringify(blocking, null, 2)}`,
+    `${RULES}\n\nFix these BLOCKING review findings for ${T.key} on branch "${T.branch}", working INSIDE the worktree at "${setup.worktreePath}" (cd there or use git -C "${setup.worktreePath}" for every git command — never commit from the base checkout). Commit relevant files only. Re-run the test and lint commands until green. Findings:\n${JSON.stringify(blocking, null, 2)}`,
     { label: `${T.key} fix r${round}`, phase: 'fix', model: 'opus', agentType: 'claude' }
   )
   round++
