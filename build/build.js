@@ -42,6 +42,7 @@ function build({ local, outDir } = {}) {
   // config schema + validator (shipped into lib/ so the command can require them)
   cp(path.join(ROOT, 'src', 'config.schema.json'), path.join(distDir, 'plugins', 'autobuild', 'lib', 'config.schema.json'))
   cp(path.join(ROOT, 'src', 'lib', 'validateConfig.js'), path.join(distDir, 'plugins', 'autobuild', 'lib', 'validateConfig.js'))
+  cp(path.join(ROOT, 'src', 'lib', 'designNotes.js'), path.join(distDir, 'plugins', 'autobuild', 'lib', 'designNotes.js'))
   // autobuild engine (all markers replaced)
   const engine = buildTemplate('runners/claude/autobuild.template.js', ['design', 'implement', 'codeReview', 'securityReview', 'designConformance'])
   const enginePath = path.join(distDir, 'plugins', 'autobuild', 'workflows', 'autobuild.js')

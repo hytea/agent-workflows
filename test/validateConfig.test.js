@@ -8,7 +8,7 @@ const good = {
   ticket: { system: 'bd', ready: 'bd ready --label {readyLabel} --json', show: 'bd show {key} --json', claim: 'bd update {key} --claim', note: 'bd update {key} --append-notes {text}', label: 'bd update {key} --add-label {label}' },
   vcs: { mode: 'local-merge' },
   toolchain: { install: 'npm install', build: 'npm run build', test: 'npm run test' },
-  labels: { ready: 'ready-to-build', parked: 'needs-human' },
+  labels: { ready: 'ready-to-build', parked: 'needs-human', designed: 'designed' },
 }
 
 test('accepts a valid config', () => {

@@ -49,3 +49,8 @@ test('build ships the supervisor workflow', () => {
   assert.match(src, /name: 'autobuild-supervisor'/)
   assert.ok(!src.includes('/*__PROMPT:'), 'supervisor should have no prompt markers')
 })
+
+test('build ships designNotes lib into plugin', () => {
+  const { distDir } = build({ outDir: tmp('designnotes-lib') })
+  assert.ok(fs.existsSync(path.join(distDir, 'plugins/autobuild/lib/designNotes.js')), 'missing designNotes.js in lib')
+})
