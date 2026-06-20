@@ -1,6 +1,6 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/hytea/agent-workflows/src/config.schema.json",
+  "$comment": "Validated by src/lib/validateConfig.js, a zero-dependency checker that interprets a subset of JSON Schema (type, required, properties, additionalProperties:false, enum). If you add keywords outside that subset, extend checkNode in validateConfig.js to honor them.",
   "title": "autobuild.config",
   "description": "Per-repo policy for the autobuild workflow. Lives at .claude/autobuild.config.json in each consuming repo.",
   "type": "object",

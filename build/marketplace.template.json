@@ -1,0 +1,12 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "agent-workflows",
+  "owner": { "name": "hytea" },
+  "metadata": {
+    "description": "Reusable multi-agent development workflows by hytea.",
+    "homepage": "https://github.com/hytea/agent-workflows"
+  },
+  "plugins": [
+    { "name": "autobuild", "source": "./plugins/autobuild" }
+  ]
+}
