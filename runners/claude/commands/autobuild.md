@@ -14,7 +14,8 @@ Drive the overnight build loop. You own the privileged side effects the workflow
    node -e "const d=new Date(process.env.RESET); if(isNaN(+d)) throw new Error('bad reset time'); console.log(d.toISOString())"
    ```
    (Accept any format `Date` parses; if it fails, ask again.) This is the ONLY time the author is needed — every later wakeup is pure arithmetic.
-3. **Write the state file** at `$(git rev-parse --git-path autobuild)/state.json` (a repo-local, git-ignored path): `{ anchorResetISO, lastRunId: null, wakeupJobId: null, wave: 0, cap: <config.caps.concurrency>, claimedKeys: [], doneKeys: [], parkedKeys: [] }`. Create the dir if needed.
+3. **Bring local `config.base` current with origin (fast-forward only).** Every ticket worktree forks off the LOCAL base branch so work compounds (each merged ticket becomes the base for the next), so the local base must start current. Run `git fetch origin` then fast-forward the local base: `git -C <repo> checkout <config.base> && git -C <repo> merge --ff-only origin/<config.base>`. If the fast-forward fails (local base has diverged or carries un-pushed local commits), do NOT force it (no reset --hard, no rebase) — report to the author and stop; a diverged base is a human decision. Leave the working tree on `config.base`.
+4. **Write the state file** at `$(git rev-parse --git-path autobuild)/state.json` (a repo-local, git-ignored path): `{ anchorResetISO, lastRunId: null, wakeupJobId: null, wave: 0, cap: <config.caps.concurrency>, claimedKeys: [], doneKeys: [], parkedKeys: [] }`. Create the dir if needed.
 
 ## Loop (each iteration)
 
