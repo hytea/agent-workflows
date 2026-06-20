@@ -54,3 +54,9 @@ test('build ships designNotes lib into plugin', () => {
   const { distDir } = build({ outDir: tmp('designnotes-lib') })
   assert.ok(fs.existsSync(path.join(distDir, 'plugins/autobuild/lib/designNotes.js')), 'missing designNotes.js in lib')
 })
+
+test('build ships packWave and rateLimit libs into plugin', () => {
+  const { distDir } = build({ outDir: tmp('overnight-libs') })
+  assert.ok(fs.existsSync(path.join(distDir, 'plugins/autobuild/lib/packWave.js')), 'missing packWave.js')
+  assert.ok(fs.existsSync(path.join(distDir, 'plugins/autobuild/lib/rateLimit.js')), 'missing rateLimit.js')
+})
