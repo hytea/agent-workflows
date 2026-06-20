@@ -38,6 +38,23 @@ The Claude plugin is one build target. Other runners (Codex, etc.) can be added 
 
 Local dev loop: `npm run build -- --local` then `/plugin marketplace add <path-to-dist>`.
 
+## Commands
+
+| Command | Description |
+|---|---|
+| `/autobuild-one <key>` | Interactive single-bead build: design → TDD implement → adversarial review → supervisor-gated local merge. Daytime use. |
+| `/autodesign <key> [--auto]` | Design one bead and cache the spec back to the bead's notes. Without `--auto` it runs an interactive brainstorm before caching; with `--auto` it drafts and caches autonomously. |
+| `/autobuild` | Autonomous overnight loop. Packs conflict-free parallel waves from all designed+ready beads, builds each wave in isolated worktrees, merges locally. **Never pushes.** Parks blockers. One author touch sets the rate-limit anchor. |
+
+### Overnight safety invariants
+
+- `vcs.mode: local-merge` — commits land on your local branch only; nothing is pushed to remote.
+- Blocker beads are parked (labeled, skipped) rather than aborting the run.
+- A single author-supplied anchor commit fixes the 1-hour rate-limit window; the engine never manufactures commits to shift it.
+- All state is written to `dist-local/` (gitignored); nothing leaks to `src/` or `runners/`.
+
+Full design: `src/docs/autobuild-design.md`.
+
 ## Design
 
 See `src/docs/` for the full design spec.
