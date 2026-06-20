@@ -19,9 +19,11 @@ log(`building wave of ${BEADS.length}: ${BEADS.map((b) => b.key).join(', ')}`)
 
 // Each bead is already designed (chunks + specPath cached) and claimed. Pass the
 // cached design straight into the engine so it SKIPS its own design phase.
+// The engine is invoked by its PLUGIN-NAMESPACED name ('autobuild:autobuild') —
+// the bare 'autobuild' does not resolve for a nested workflow() call.
 const results = await parallel(
   BEADS.map((b) => () =>
-    workflow('autobuild', {
+    workflow('autobuild:autobuild', {
       config: CFG,
       profile: PROFILE,
       ticket: { key: b.key, branch: b.branch, specPath: b.specPath, chunks: b.chunks },
