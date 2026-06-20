@@ -73,7 +73,8 @@ const DESIGN_SCHEMA = {
     spec: { type: 'string' }, specPath: { type: 'string' },
     surface: { type: 'array', items: { type: 'string' } },
     chunks: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['id', 'title', 'model', 'files', 'instructions'],
-      properties: { id: { type: 'string' }, title: { type: 'string' }, model: { type: 'string', enum: ['haiku', 'sonnet', 'opus'] }, files: { type: 'array', items: { type: 'string' } }, instructions: { type: 'string' } } } },
+      properties: { id: { type: 'string' }, title: { type: 'string' }, model: { type: 'string', enum: ['haiku', 'sonnet', 'opus'] }, files: { type: 'array', items: { type: 'string' } }, instructions: { type: 'string' },
+        testExempt: { type: 'boolean' }, testExemptReason: { type: 'string' } } } },
     escalations: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['decision', 'options', 'recommendation', 'rationale'],
       properties: { decision: { type: 'string' }, options: { type: 'array', items: { type: 'string' } }, recommendation: { type: 'string' }, rationale: { type: 'string' } } } },
   },
@@ -119,14 +120,19 @@ if (!setup) return { key: T.key, branch: T.branch, specPath, verdict: 'blocked',
 // evidence; the engine gates on a real red phase so a non-discriminating test
 // (passes with and without the fix) cannot slip through as "TDD done".
 phase('implement')
-const enforceRed = !!testCmd // no test command configured => nothing to gate
+const haveTestCmd = !!testCmd // no test command configured => nothing to gate
 for (const c of chunks) {
+  // A chunk may be genuinely non-testable (LICENSE, README, pure config). The
+  // design agent marks those testExempt with a reason; the gate then skips so a
+  // legitimate chunk is not hard-blocked just because the repo has a test cmd.
+  const gateChunk = haveTestCmd && !c.testExempt
+  if (haveTestCmd && c.testExempt) log(`${T.key} ${c.id}: TDD gate skipped (testExempt: ${c.testExemptReason || 'no reason given'})`)
   const impl = await agent(
     fill(/*__PROMPT:implement__*/, { ...ctx, chunkId: c.id, chunkTitle: c.title, chunkFiles: (c.files || []).join(', '), chunkInstructions: c.instructions }),
-    { label: `${T.key} ${c.id}: ${c.title}`, phase: 'implement', model: c.model || 'sonnet', agentType: 'claude', schema: enforceRed ? IMPLEMENT_SCHEMA : undefined }
+    { label: `${T.key} ${c.id}: ${c.title}`, phase: 'implement', model: c.model || 'sonnet', agentType: 'claude', schema: gateChunk ? IMPLEMENT_SCHEMA : undefined }
   )
   if (!impl) return { key: T.key, branch: T.branch, specPath, worktreePath: setup.worktreePath, verdict: 'blocked', findings: [{ issue: `implement agent errored on chunk ${c.id}` }] }
-  if (enforceRed) {
+  if (gateChunk) {
     const redOk = Number.isInteger(impl.redExitCode) && impl.redExitCode !== 0
     const greenOk = impl.greenExitCode === 0
     if (!redOk || !greenOk || !impl.committed) {

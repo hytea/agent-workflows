@@ -33,7 +33,13 @@ function checkNode(value, node, instancePath, errors) {
   if (node.enum && !node.enum.includes(value)) {
     errors.push(`${instancePath || '(root)'} must be one of ${JSON.stringify(node.enum)}`)
   }
-  if (node.type === 'object' && value && typeof value === 'object' && !Array.isArray(value)) {
+  // Apply object checks for any node that declares object-applicable keywords,
+  // not only nodes with an explicit type:'object'. JSON Schema does not require
+  // the type keyword, so a properties/required-only node must still be enforced
+  // — otherwise such a node would silently skip required/additionalProperties.
+  const isObjectNode = node.type === 'object'
+    || node.properties !== undefined || node.required !== undefined || node.additionalProperties !== undefined
+  if (isObjectNode && value && typeof value === 'object' && !Array.isArray(value)) {
     const props = node.properties || {}
     for (const key of node.required || []) {
       if (!(key in value)) errors.push(`${instancePath || '(root)'} missing required property '${key}'`)
@@ -50,9 +56,15 @@ function checkNode(value, node, instancePath, errors) {
 }
 
 function validateConfig(config) {
+  return validateNode(config, schema)
+}
+
+// Validate a value against an arbitrary schema node. Exposed so the schema
+// subset's semantics (including type-less object nodes) can be tested directly.
+function validateNode(value, node) {
   const errors = []
-  checkNode(config, schema, '', errors)
+  checkNode(value, node, '', errors)
   return { valid: errors.length === 0, errors }
 }
 
-module.exports = { validateConfig }
+module.exports = { validateConfig, validateNode }

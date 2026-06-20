@@ -31,5 +31,11 @@ test('template enforces a TDD red-phase gate on implement chunks', () => {
   assert.match(src, /redExitCode/, 'must capture the red-phase exit code')
   // Gate must block when the red phase did not actually fail (exit 0).
   assert.match(src, /redOk[\s\S]*redExitCode !== 0/, 'must require a non-zero red exit')
-  assert.match(src, /enforceRed = !!testCmd/, 'gate must be skipped when no test command is configured')
+  assert.match(src, /haveTestCmd = !!testCmd/, 'gate must be skipped when no test command is configured')
+})
+
+test('template lets a chunk opt out of the TDD gate when genuinely non-testable', () => {
+  // A docs/LICENSE/config chunk marked testExempt must not be hard-blocked.
+  assert.match(src, /testExempt/, 'must honor a per-chunk testExempt flag')
+  assert.match(src, /gateChunk = haveTestCmd && !c\.testExempt/, 'gate must skip exempt chunks')
 })

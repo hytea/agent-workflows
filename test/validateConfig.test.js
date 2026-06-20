@@ -45,3 +45,21 @@ test('rejects a missing nested required ticket field', () => {
   const r = validateConfig(bad)
   assert.strictEqual(r.valid, false)
 })
+
+test('enforces object checks on a type-less node (properties/required only)', () => {
+  // Guards the validator against a future schema node that omits type:'object'
+  // but declares required/additionalProperties — JSON Schema permits this and
+  // the node must still be enforced rather than silently skipped.
+  const { validateNode } = require('../src/lib/validateConfig')
+  const node = {
+    required: ['a'],
+    additionalProperties: false,
+    properties: { a: { type: 'string' } },
+  }
+  // missing required 'a'
+  assert.strictEqual(validateNode({}, node).valid, false, 'must catch missing required on a type-less node')
+  // unknown property
+  assert.strictEqual(validateNode({ a: 'x', b: 1 }, node).valid, false, 'must catch unknown prop on a type-less node')
+  // valid
+  assert.strictEqual(validateNode({ a: 'x' }, node).valid, true)
+})
