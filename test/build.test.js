@@ -31,3 +31,12 @@ test('build ships config schema and validator into plugin lib/', () => {
     assert.ok(fs.existsSync(path.join(distDir, f)), `missing ${f}`)
   }
 })
+
+test('build ships the autodesign workflow with design prompt inlined', () => {
+  const { distDir } = build({ outDir: tmp('autodesign') })
+  const p = path.join(distDir, 'plugins/autobuild/workflows/autodesign.js')
+  assert.ok(fs.existsSync(p), 'missing autodesign.js')
+  const src = fs.readFileSync(p, 'utf8')
+  assert.ok(!src.includes('/*__PROMPT:'), 'unreplaced prompt marker in autodesign.js')
+  assert.match(src, /Design ticket/) // text from design.md is inlined
+})
