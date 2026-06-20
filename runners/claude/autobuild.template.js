@@ -35,6 +35,12 @@ const RULES = [
   `TDD is mandatory: failing test first, then implement. Match existing conventions.`,
   `Use these ticket commands (substitute placeholders): show="${(CFG.ticket||{}).show||''}", note="${(CFG.ticket||{}).note||''}", label="${(CFG.ticket||{}).label||''}".`,
   `git add ONLY the current chunk's files (never "git add -A").${noPush}`,
+  `DESTRUCTIVE-OPERATION GUARDRAIL (autonomous mode — you cannot ask a human, so never guess): ` +
+    `NEVER run a command that discards work or mutates state outside your chunk without first auditing the exact ramifications. Specifically forbidden unless you have inspected the full state and confirmed zero unintended loss: ` +
+    `(a) destructive git — git reset --hard, git checkout/restore that overwrites a modified file, git clean -fd, git stash drop, force branch deletion, or anything that drops uncommitted or unpushed work; prefer git reset --soft/--mixed, inspect git status + git stash list + git reflog first, and NEVER run any of these while unrelated dirty files are present in the tree. ` +
+    `(b) filesystem destruction — rm -rf, deleting untracked files, or overwriting/truncating any file you did not create or that lies OUTSIDE your assigned worktree. ` +
+    `(c) database / external mutation — destructive migrations (e.g. prisma migrate reset), dropping tables, destructive SQL, deleting cloud resources, or sending real emails/webhooks/payments. ` +
+    `If a task seems to require any of the above, STOP and surface it as a blocking finding (the supervisor will park it needs-human) — do not perform the operation. To undo your OWN just-made commit, use git reset --soft HEAD~1 inside the worktree, never --hard.`,
   PROFILE ? `Repo conventions:\n${PROFILE}` : '',
 ].filter(Boolean).join(' ')
 

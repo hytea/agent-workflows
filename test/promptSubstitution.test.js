@@ -24,3 +24,14 @@ test('built engine is syntactically valid as a workflow async-body', () => {
     new AsyncFunction('args', 'agent', 'parallel', 'pipeline', 'phase', 'log', 'budget', 'workflow', body)
   }, 'inlined prompts must produce a syntactically valid workflow body')
 })
+
+// The destructive-operation guardrail is a safety invariant in the agent RULES.
+// Assert it ships in BOTH autonomous workflows so a future refactor cannot
+// silently drop it (the build wires RULES into every agent prompt at runtime).
+test('both workflows carry the destructive-operation guardrail', () => {
+  const { distDir } = build({ outDir: tmp('guardrail') })
+  for (const wf of ['autobuild.js', 'autodesign.js']) {
+    const src = fs.readFileSync(path.join(distDir, 'plugins/autobuild/workflows', wf), 'utf8')
+    assert.match(src, /DESTRUCTIVE-OPERATION GUARDRAIL/, `${wf} missing destructive-operation guardrail`)
+  }
+})

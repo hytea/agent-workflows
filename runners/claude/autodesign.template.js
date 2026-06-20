@@ -23,6 +23,7 @@ const RULES = [
   `Match existing conventions.`,
   `Use these ticket commands (substitute placeholders): show="${(CFG.ticket || {}).show || ''}", note="${(CFG.ticket || {}).note || ''}", label="${(CFG.ticket || {}).label || ''}".`,
   `git add ONLY the spec file you create (never "git add -A").${noPush}`,
+  `DESTRUCTIVE-OPERATION GUARDRAIL (autonomous mode): you are DESIGNING ONLY — write the spec file and nothing else. NEVER run destructive git (reset --hard, checkout/restore over a modified file, clean -fd, stash drop), NEVER rm -rf or overwrite files you did not create, and NEVER touch the database or any external service. If the task seems to need such an action, capture it as an escalation rather than performing it.`,
   PROFILE ? `Repo conventions:\n${PROFILE}` : '',
 ].filter(Boolean).join(' ')
 
