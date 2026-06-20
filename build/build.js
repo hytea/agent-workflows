@@ -37,8 +37,11 @@ function build({ local, outDir } = {}) {
   cp(path.join(ROOT, 'build', 'marketplace.template.json'), path.join(distDir, '.claude-plugin', 'marketplace.json'))
   // plugin manifest
   cp(path.join(ROOT, 'runners', 'claude', 'plugin.json'), path.join(distDir, 'plugins', 'autobuild', '.claude-plugin', 'plugin.json'))
-  // command
-  cp(path.join(ROOT, 'runners', 'claude', 'commands', 'autobuild-one.md'), path.join(distDir, 'plugins', 'autobuild', 'commands', 'autobuild-one.md'))
+  // copy ALL command files (so new commands ship automatically)
+  const cmdSrcDir = path.join(ROOT, 'runners', 'claude', 'commands')
+  for (const f of fs.readdirSync(cmdSrcDir)) {
+    if (f.endsWith('.md')) cp(path.join(cmdSrcDir, f), path.join(distDir, 'plugins', 'autobuild', 'commands', f))
+  }
   // config schema + validator (shipped into lib/ so the command can require them)
   cp(path.join(ROOT, 'src', 'config.schema.json'), path.join(distDir, 'plugins', 'autobuild', 'lib', 'config.schema.json'))
   cp(path.join(ROOT, 'src', 'lib', 'validateConfig.js'), path.join(distDir, 'plugins', 'autobuild', 'lib', 'validateConfig.js'))

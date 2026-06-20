@@ -60,3 +60,10 @@ test('build ships packWave and rateLimit libs into plugin', () => {
   assert.ok(fs.existsSync(path.join(distDir, 'plugins/autobuild/lib/packWave.js')), 'missing packWave.js')
   assert.ok(fs.existsSync(path.join(distDir, 'plugins/autobuild/lib/rateLimit.js')), 'missing rateLimit.js')
 })
+
+test('build ships all command files', () => {
+  const { distDir } = build({ outDir: tmp('commands') })
+  for (const f of ['autobuild-one.md', 'autodesign.md', 'autobuild.md']) {
+    assert.ok(fs.existsSync(path.join(distDir, 'plugins/autobuild/commands', f)), `missing command ${f}`)
+  }
+})
