@@ -56,6 +56,7 @@ function build({ local, outDir } = {}) {
   cp(path.join(ROOT, 'src', 'lib', 'designNotes.js'), path.join(distDir, 'plugins', 'autobuild', 'lib', 'designNotes.js'))
   cp(path.join(ROOT, 'src', 'lib', 'packWave.js'), path.join(distDir, 'plugins', 'autobuild', 'lib', 'packWave.js'))
   cp(path.join(ROOT, 'src', 'lib', 'rateLimit.js'), path.join(distDir, 'plugins', 'autobuild', 'lib', 'rateLimit.js'))
+  cp(path.join(ROOT, 'src', 'lib', 'ciStatus.js'), path.join(distDir, 'plugins', 'autobuild', 'lib', 'ciStatus.js'))
   // autobuild engine (all markers replaced)
   const engine = buildTemplate('runners/claude/autobuild.template.js', ['design', 'implement', 'codeReview', 'securityReview', 'designConformance', 'uiReview'])
   const enginePath = path.join(distDir, 'plugins', 'autobuild', 'workflows', 'autobuild.js')

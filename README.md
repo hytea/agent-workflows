@@ -45,6 +45,7 @@ Local dev loop: `npm run build -- --local` then `/plugin marketplace add <path-t
 | `/autobuild-one <key>` | Interactive single-bead build: design → TDD implement → adversarial review → supervisor-gated local merge. Daytime use. |
 | `/autodesign <key> [--auto]` | Design one bead and cache the spec back to the bead's notes. Without `--auto` it runs an interactive brainstorm before caching; with `--auto` it drafts and caches autonomously. |
 | `/autobuild` | Autonomous overnight loop. Packs conflict-free parallel waves from all designed+ready beads, builds each wave in isolated worktrees, merges locally. **Never pushes.** Parks blockers. One author touch sets the rate-limit anchor. |
+| `/autobuild-issue <key>` | Autonomous single-issue engineering manager. Shepherds ONE issue from design through a clean, review-ready PR: designs if needed, builds via the engine, **pushes and opens a PR**, then drives internal adversarial review and CI to green. Stops only when the PR is clean and ready to merge. No waves, no wakeups. **Never auto-merges.** |
 
 ### Overnight safety invariants
 
