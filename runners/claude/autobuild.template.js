@@ -80,18 +80,10 @@ const IMPLEMENT_SCHEMA = {
     committed: { type: 'boolean' },
   },
 }
-const DESIGN_SCHEMA = {
-  type: 'object', additionalProperties: false, required: ['spec', 'specPath', 'surface', 'chunks', 'escalations'],
-  properties: {
-    spec: { type: 'string' }, specPath: { type: 'string' },
-    surface: { type: 'array', items: { type: 'string' } },
-    chunks: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['id', 'title', 'model', 'files', 'instructions'],
-      properties: { id: { type: 'string' }, title: { type: 'string' }, model: { type: 'string', enum: ['haiku', 'sonnet', 'opus'] }, files: { type: 'array', items: { type: 'string' } }, instructions: { type: 'string' },
-        testExempt: { type: 'boolean' }, testExemptReason: { type: 'string' } } } },
-    escalations: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['decision', 'options', 'recommendation', 'rationale'],
-      properties: { decision: { type: 'string' }, options: { type: 'array', items: { type: 'string' } }, recommendation: { type: 'string' }, rationale: { type: 'string' } } } },
-  },
-}
+// Shared design-agent output contract, inlined at build time from
+// src/lib/designSchema.js (workflow bodies cannot require). Single source means
+// the engine and autodesign never validate against divergent shapes.
+const DESIGN_SCHEMA = /*__SCHEMA:design__*/
 
 const fill = (tpl, map) => tpl.replace(/\{(\w+)\}/g, (m, k) => (k in map ? map[k] : m))
 const ctx = { RULES, key: T.key, branch: T.branch, base: BASE, testCmd, lintCmd }
@@ -179,8 +171,12 @@ if (uiConfigured) {
     `${RULES}\n\nIn the worktree at "${setup.worktreePath}", run: git -C "${setup.worktreePath}" diff --name-only ${BASE}...${T.branch}. Does ANY changed path match the glob "${UI.appGlob}"? Answer strictly via the schema.`,
     { label: `${T.key} ui-detect`, phase: 'review', model: 'haiku', agentType: 'claude', schema: { type: 'object', additionalProperties: false, required: ['touchesUI'], properties: { touchesUI: { type: 'boolean' } } } }
   )
-  touchesUI = !!(det && det.touchesUI)
-  if (touchesUI) log(`${T.key}: change touches ${UI.appGlob} → UI review enabled (port ${uiPort})`)
+  // Fail CLOSED: a null det means the detector errored, so we cannot prove the
+  // change is UI-free. Default to running the rendered review (every other
+  // reviewer fails closed too) rather than silently merging a UI change unseen.
+  touchesUI = det ? !!det.touchesUI : uiConfigured
+  if (!det) log(`${T.key}: ui-detect errored → running UI review anyway (fail-closed, port ${uiPort})`)
+  else if (touchesUI) log(`${T.key}: change touches ${UI.appGlob} → UI review enabled (port ${uiPort})`)
 }
 
 // REVIEW + FIX loop
@@ -204,7 +200,16 @@ while (round <= MAX_FIX_ROUNDS) {
   const ui = touchesUI ? reviews[3] : true // non-UI tickets have no UI reviewer to satisfy
   const allReturned = code && sec && conf && ui
   const blocking = reviews.flatMap((r) => (r && r.blocking) || [])
-  lastBlocking = blocking
+  // A reviewer that ERRORED contributes nothing to `blocking`, so the run can be
+  // not-clean (allReturned false) with an empty blocking list. Backfill an
+  // actionable finding naming the missing reviewer so a parked ticket never
+  // carries an empty, reasonless findings list.
+  const reviewerNames = touchesUI ? ['code', 'security', 'design-conformance', 'ui'] : ['code', 'security', 'design-conformance']
+  const erroredReviewers = reviewerNames.filter((_n, i) => !reviews[i])
+  lastBlocking = blocking.length || allReturned ? blocking : erroredReviewers.map((n) => ({
+    severity: 'high', file: '', issue: `The ${n} reviewer did not return (agent errored), so this ticket could not be verified clean.`,
+    fix: `Re-run the build for ${T.key}; the ${n} review must complete before merge.`,
+  }))
   if (blocking.length === 0 && allReturned) { clean = true; break }
   if (round === MAX_FIX_ROUNDS) { log(`${T.key}: ${blocking.length} blocking after ${round} rounds (or a reviewer errored)`); break }
   phase('fix')

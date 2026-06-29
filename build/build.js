@@ -1,6 +1,12 @@
 const fs = require('fs')
 const path = require('path')
 const { loadPrompts } = require('../src/lib/loadPrompts')
+const { DESIGN_SCHEMA } = require('../src/lib/designSchema')
+
+// Build-time schema injection: workflow script bodies cannot `require`, so a
+// schema shared by multiple templates is inlined at /*__SCHEMA:name__*/ markers
+// from one source of truth (mirrors prompt-marker inlining below).
+const SCHEMAS = { design: DESIGN_SCHEMA }
 
 const ROOT = path.join(__dirname, '..')
 
@@ -24,6 +30,10 @@ function buildTemplate(tplRelPath, markerNames) {
   for (const name of markerNames) {
     if (!(name in map)) throw new Error(`buildTemplate: no prompt for marker '${name}'`)
     src = src.split(`/*__PROMPT:${name}__*/`).join(quote(map[name]))
+  }
+  // Inline any shared schema markers from their single source.
+  for (const [name, schema] of Object.entries(SCHEMAS)) {
+    src = src.split(`/*__SCHEMA:${name}__*/`).join(JSON.stringify(schema))
   }
   return src
 }

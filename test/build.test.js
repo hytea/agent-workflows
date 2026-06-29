@@ -50,6 +50,28 @@ test('build ships the supervisor workflow', () => {
   assert.ok(!src.includes('/*__PROMPT:'), 'supervisor should have no prompt markers')
 })
 
+test('build inlines the shared design schema from a single source into both workflows', () => {
+  const { distDir } = build({ outDir: tmp('design-schema') })
+  for (const f of ['autobuild.js', 'autodesign.js']) {
+    const src = fs.readFileSync(path.join(distDir, 'plugins/autobuild/workflows', f), 'utf8')
+    assert.ok(!src.includes('/*__SCHEMA:'), `unreplaced schema marker in ${f}`)
+    // The inlined object must carry the design contract's signature fields.
+    assert.match(src, /const DESIGN_SCHEMA = \{"type":"object"/, `design schema not inlined in ${f}`)
+    assert.match(src, /"escalations"/, `inlined schema missing escalations in ${f}`)
+  }
+})
+
+test('raw templates no longer hand-maintain a duplicate design schema literal', () => {
+  // The schema lives once in src/lib/designSchema.js and is injected at build
+  // time; neither template should re-declare the literal object (which is how the
+  // two copies silently drifted before).
+  for (const f of ['autobuild.template.js', 'autodesign.template.js']) {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'runners', 'claude', f), 'utf8')
+    assert.ok(src.includes('/*__SCHEMA:design__*/'), `${f} must use the schema marker`)
+    assert.ok(!/required: \['spec', 'specPath'/.test(src), `${f} still inlines the design schema literal`)
+  }
+})
+
 test('build ships designNotes lib into plugin', () => {
   const { distDir } = build({ outDir: tmp('designnotes-lib') })
   assert.ok(fs.existsSync(path.join(distDir, 'plugins/autobuild/lib/designNotes.js')), 'missing designNotes.js in lib')

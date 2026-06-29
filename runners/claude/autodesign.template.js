@@ -27,18 +27,10 @@ const RULES = [
   PROFILE ? `Repo conventions:\n${PROFILE}` : '',
 ].filter(Boolean).join(' ')
 
-const DESIGN_SCHEMA = {
-  type: 'object', additionalProperties: false, required: ['spec', 'specPath', 'surface', 'chunks', 'escalations'],
-  properties: {
-    spec: { type: 'string' }, specPath: { type: 'string' },
-    surface: { type: 'array', items: { type: 'string' } },
-    chunks: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['id', 'title', 'model', 'files', 'instructions'],
-      properties: { id: { type: 'string' }, title: { type: 'string' }, model: { type: 'string', enum: ['haiku', 'sonnet', 'opus'] }, files: { type: 'array', items: { type: 'string' } }, instructions: { type: 'string' },
-        testExempt: { type: 'boolean' }, testExemptReason: { type: 'string' } } } },
-    escalations: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['decision', 'options', 'recommendation', 'rationale'],
-      properties: { decision: { type: 'string' }, options: { type: 'array', items: { type: 'string' } }, recommendation: { type: 'string' }, rationale: { type: 'string' } } } },
-  },
-}
+// Shared design-agent output contract, inlined at build time from
+// src/lib/designSchema.js (workflow bodies cannot require) — same source the
+// autobuild engine uses, so the two never validate against divergent shapes.
+const DESIGN_SCHEMA = /*__SCHEMA:design__*/
 
 const fill = (tpl, map) => tpl.replace(/\{(\w+)\}/g, (m, k) => (k in map ? map[k] : m))
 const ctx = { RULES, key: T.key, branch: T.branch, base: BASE }

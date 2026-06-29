@@ -36,3 +36,20 @@ test('parseDesign takes the LAST block when re-designed', () => {
   const parsed = parseDesign(`${first}\n...later...\n${second}`)
   assert.strictEqual(parsed.specPath, 'NEW.md')
 })
+
+test('parseDesign advances cleanly past each close across many adjacent blocks', () => {
+  // Three blocks with no filler between them. The scan cursor must land strictly
+  // PAST each closing fence (\n```), not on its last backtick, so every block is
+  // consumed exactly once and the genuinely-last design wins.
+  const blocks = ['A.md', 'B.md', 'LAST.md'].map((p) => serializeDesign({ ...design, specPath: p }))
+  const parsed = parseDesign(blocks.join('\n'))
+  assert.strictEqual(parsed.specPath, 'LAST.md')
+})
+
+test('parseDesign returns the closing fence position past the delimiter (no re-scan)', () => {
+  // A single block whose JSON body itself contains the FENCE_OPEN token must not
+  // confuse the cursor: parsing returns the real payload, never a fragment.
+  const block = serializeDesign({ ...design, specPath: 'docs/```autodesign-in-path.md' })
+  const parsed = parseDesign(`prefix\n${block}\nsuffix`)
+  assert.strictEqual(parsed.specPath, 'docs/```autodesign-in-path.md')
+})

@@ -27,7 +27,10 @@ function parseDesign(notesText) {
     const close = text.indexOf('\n' + FENCE_CLOSE, bodyStart)
     if (close === -1) break
     lastBody = text.slice(bodyStart, close).trim()
-    from = close + FENCE_CLOSE.length
+    // close points at the '\n' that precedes the closing fence, so the full
+    // delimiter is '\n' + FENCE_CLOSE. Advance past ALL of it; advancing only
+    // FENCE_CLOSE.length leaves the cursor inside the just-consumed fence.
+    from = close + 1 + FENCE_CLOSE.length
   }
   if (lastBody === null) return null
   try {

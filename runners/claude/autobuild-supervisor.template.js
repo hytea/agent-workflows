@@ -21,12 +21,17 @@ log(`building wave of ${BEADS.length}: ${BEADS.map((b) => b.key).join(', ')}`)
 // cached design straight into the engine so it SKIPS its own design phase.
 // The engine is invoked by its PLUGIN-NAMESPACED name ('autobuild:autobuild') —
 // the bare 'autobuild' does not resolve for a nested workflow() call.
+// waveIndex is the bead's position in this wave. The engine adds it to
+// ui.devServerPortBase so concurrent UI-touching beads each render on a distinct
+// port; without it they collide on the base port and all but the first are
+// spuriously parked "UI could not be verified".
 const results = await parallel(
-  BEADS.map((b) => () =>
+  BEADS.map((b, i) => () =>
     workflow('autobuild:autobuild', {
       config: CFG,
       profile: PROFILE,
       ticket: { key: b.key, branch: b.branch, specPath: b.specPath, chunks: b.chunks },
+      waveIndex: i,
       autonomous: true,
     })
   )

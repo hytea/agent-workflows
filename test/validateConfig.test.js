@@ -46,6 +46,17 @@ test('rejects a missing nested required ticket field', () => {
   assert.strictEqual(r.valid, false)
 })
 
+test('rejects a config missing labels.designed with an actionable error', () => {
+  // labels.designed is consumed by /autodesign and /autobuild (they apply it as
+  // the "cached design" tag), so it is genuinely required — a config without it
+  // cannot run the design→build flow. The rejection must name the missing key so
+  // an upgrading user knows exactly what to add.
+  const bad = { ...good, labels: { ...good.labels } }; delete bad.labels.designed
+  const r = validateConfig(bad)
+  assert.strictEqual(r.valid, false)
+  assert.ok(r.errors.some((e) => /designed/.test(e)), `error must name 'designed': ${JSON.stringify(r.errors)}`)
+})
+
 test('enforces object checks on a type-less node (properties/required only)', () => {
   // Guards the validator against a future schema node that omits type:'object'
   // but declares required/additionalProperties — JSON Schema permits this and
