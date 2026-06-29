@@ -30,17 +30,40 @@ Unlike `/autobuild-one` (interactive, stops at the local branch) and `/autobuild
    ```
    Generate the PR body from the spec and the engine's review summary (what was built, how it was verified). If a PR for the branch already exists (re-run), reuse it (`gh pr view <branch>`) instead of creating a duplicate.
 
-7. **Drive CI to green.** Poll the PR's checks until they conclude, using the shipped `ciStatus` helper to classify `gh pr checks` output:
+7. **Drive CI to green.** Poll the PR's checks, classifying them with the shipped `ciStatus` helper. The categorizer is gh's `bucket` field — request `--json bucket,state,name`. CRITICAL: `gh pr checks` exits NON-ZERO when checks are pending (exit 8) or failing (exit 1) while STILL writing valid JSON to stdout, so you must capture stdout regardless of exit code and must NOT collapse a non-zero exit to `[]` (that would mask the very states you are polling for). Run:
    ```
-   node -e "const{summarize}=require(process.env.PLUGIN+'/lib/ciStatus');const cp=require('child_process');const out=cp.execSync('gh pr checks '+process.env.BRANCH+' --json name,state,conclusion 2>/dev/null||echo []',{encoding:'utf8'});console.log(JSON.stringify(summarize(JSON.parse(out))))"
+   BRANCH=<build branch>
+   node -e "
+     const { summarize } = require(process.env.PLUGIN + '/lib/ciStatus');
+     const { execFileSync } = require('child_process');
+     let out = '', err = '';
+     try { out = execFileSync('gh', ['pr','checks', process.env.BRANCH, '--json','bucket,state,name'], { encoding: 'utf8' }); }
+     catch (e) { out = (e.stdout || '').toString(); err = (e.stderr || '').toString(); }  // gh exits 8/1 with JSON still on stdout
+     let verdict;
+     if (out.trim()) {
+       let checks; try { checks = JSON.parse(out); } catch (_e) { checks = null; }  // bad JSON => unknown
+       verdict = summarize(checks);
+     } else if (/no checks reported/i.test(err)) {
+       verdict = { state: 'none', pending: 0, failing: [] };   // genuinely no CI on this repo
+     } else {
+       verdict = { state: 'unknown', pending: 0, failing: [] }; // could not read checks (auth/network/no PR)
+     }
+     console.log(JSON.stringify(verdict));
+   "
    ```
-   `summarize` returns `{ state: 'pending' | 'passing' | 'failing' | 'none', pending, failing[] }`.
-   - `state: 'none'` (no checks configured on the repo): treat CI as satisfied and skip to Step 9.
-   - `state: 'pending'`: wait and re-poll. Pace yourself — re-check on a sensible interval rather than busy-looping.
-   - `state: 'passing'`: CI is green; go to Step 9.
-   - `state: 'failing'`: go to Step 8 to fix.
+   `summarize` returns `{ state: 'passing' | 'failing' | 'pending' | 'none' | 'unknown', pending, failing[] }`. The empty-stdout cases are disambiguated above: gh's "no checks reported" message → `none` (proceed), any other read failure → `unknown` (do not declare ready).
+   - `state: 'passing'`: CI is green → Step 9.
+   - `state: 'none'` (the checks list was empty — no CI configured on the repo): treat CI as satisfied → Step 9.
+   - `state: 'pending'`: checks still running. Wait and re-poll on a sensible interval (do not busy-loop).
+   - `state: 'failing'`: go to Step 8.
+   - `state: 'unknown'` (could NOT read checks — gh auth/network error, no PR, unparseable output): do NOT treat as success. Retry a couple of times; if it persists, **report only** (surface that CI status could not be determined and the PR URL) and stop. A PR is never declared ready on an undetermined CI state.
 
-8. **Fix CI/review failures via the engine, then re-push.** For each failing check, gather its log (`gh run view --log-failed` or the check's detail) and feed the concrete failure into a fix pass: re-invoke `Workflow({ name: 'autobuild:autobuild', args })` on the SAME branch with the failures appended to `ticket.ticketText` as blocking context (the engine re-runs its TDD + adversarial review fix loop inside the existing worktree). Re-push the branch (Step 6's push only) and return to Step 7. Bound this to `config.caps.maxFixRounds` CI-fix rounds; if still failing after that, **report only** (surface the failing checks and the PR URL) and stop.
+8. **Fix failing checks in the EXISTING worktree, then re-push.** The build branch and its worktree from Step 5 already exist, so do NOT re-invoke the full engine here — its setup phase runs `git worktree add -b <branch>`, which fails when the branch already exists. Instead, fix in place:
+   - For each failing check, gather the concrete failure (`gh pr checks <branch>` for the link, then `gh run view --log-failed` for workflow runs, or fetch the check's detail) so the fix targets the real error, not a guess.
+   - Spawn a fix subagent scoped to the existing worktree (same RULES/conventions the engine uses): `Task`/`Agent` instructed to work INSIDE `<worktreePath>` (cd there or `git -C <worktreePath>`), reproduce the failure locally where possible (run `config.toolchain.test`/`lint`/`build`), fix it under TDD, and commit only the relevant files. Never force-push, never touch the base branch.
+   - Re-run the engine's review on the fixed branch by spawning the same adversarial reviewers (code/security/design-conformance, plus UI if it touched the app glob) against the worktree, so a CI fix cannot regress review quality.
+   - Re-push the branch (`git -C <worktreePath> push origin <branch>` — no `-u`, no force) and return to Step 7.
+   - Bound this to `config.caps.maxFixRounds` CI-fix rounds; if still failing after that, **report only** (surface the failing checks and the PR URL) and stop.
 
 9. **Report ready-to-merge.** The PR is open, internal adversarial review passed, and CI is green (or absent). Summarize: PR URL, branch, spec path, what was built, and the review + CI outcome. **Stop here — never merge.** The human makes the merge call.
 

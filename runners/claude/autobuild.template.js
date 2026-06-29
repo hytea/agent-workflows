@@ -187,25 +187,26 @@ while (round <= MAX_FIX_ROUNDS) {
   // appended only for UI-touching changes; it renders the page via Playwright
   // on the allocated port. A reviewer that errors returns null → treated as
   // NOT clean (never a silent pass).
-  const reviewers = [
-    () => agent(fill(/*__PROMPT:codeReview__*/, ctx), { label: `${T.key} code r${round}`, phase: 'review', model: 'opus', agentType: 'claude', schema: REVIEW_SCHEMA }),
-    () => agent(fill(/*__PROMPT:securityReview__*/, ctx), { label: `${T.key} sec r${round}`, phase: 'review', model: 'opus', agentType: 'claude', schema: REVIEW_SCHEMA }),
-    () => agent(fill(/*__PROMPT:designConformance__*/, ctx), { label: `${T.key} conf r${round}`, phase: 'review', model: 'opus', agentType: 'claude', schema: REVIEW_SCHEMA }),
+  // Single source for the review set: each spec carries its name (used for both
+  // the agent label and the errored-reviewer backfill, so the two can never
+  // drift) and its filled prompt. The rendered UI reviewer is included only for
+  // UI-touching changes. A reviewer that errors returns null → NOT clean.
+  const reviewerSpecs = [
+    { name: 'code', short: 'code', prompt: fill(/*__PROMPT:codeReview__*/, ctx) },
+    { name: 'security', short: 'sec', prompt: fill(/*__PROMPT:securityReview__*/, ctx) },
+    { name: 'design-conformance', short: 'conf', prompt: fill(/*__PROMPT:designConformance__*/, ctx) },
   ]
-  if (touchesUI) {
-    reviewers.push(() => agent(fill(/*__PROMPT:uiReview__*/, ctx), { label: `${T.key} ui r${round}`, phase: 'review', model: 'opus', agentType: 'claude', schema: REVIEW_SCHEMA }))
-  }
-  const reviews = await parallel(reviewers)
-  const [code, sec, conf] = reviews
-  const ui = touchesUI ? reviews[3] : true // non-UI tickets have no UI reviewer to satisfy
-  const allReturned = code && sec && conf && ui
+  if (touchesUI) reviewerSpecs.push({ name: 'ui', short: 'ui', prompt: fill(/*__PROMPT:uiReview__*/, ctx) })
+  const reviews = await parallel(reviewerSpecs.map((s) => () =>
+    agent(s.prompt, { label: `${T.key} ${s.short} r${round}`, phase: 'review', model: 'opus', agentType: 'claude', schema: REVIEW_SCHEMA })
+  ))
+  const allReturned = reviews.every(Boolean)
   const blocking = reviews.flatMap((r) => (r && r.blocking) || [])
   // A reviewer that ERRORED contributes nothing to `blocking`, so the run can be
   // not-clean (allReturned false) with an empty blocking list. Backfill an
-  // actionable finding naming the missing reviewer so a parked ticket never
-  // carries an empty, reasonless findings list.
-  const reviewerNames = touchesUI ? ['code', 'security', 'design-conformance', 'ui'] : ['code', 'security', 'design-conformance']
-  const erroredReviewers = reviewerNames.filter((_n, i) => !reviews[i])
+  // actionable finding naming the missing reviewer (names come from the same
+  // reviewerSpecs list, so they cannot be misaligned with the reviews array).
+  const erroredReviewers = reviewerSpecs.filter((_s, i) => !reviews[i]).map((s) => s.name)
   lastBlocking = blocking.length || allReturned ? blocking : erroredReviewers.map((n) => ({
     severity: 'high', file: '', issue: `The ${n} reviewer did not return (agent errored), so this ticket could not be verified clean.`,
     fix: `Re-run the build for ${T.key}; the ${n} review must complete before merge.`,
