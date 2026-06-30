@@ -17,7 +17,14 @@ const AUTONOMOUS = !!A.autonomous // reserved: consumed by the autonomous superv
 const BASE = CFG.base
 const TC = CFG.toolchain || {}
 const CAPS = CFG.caps || {}
+const UI = CFG.ui || {}
 const MAX_FIX_ROUNDS = Number.isInteger(CAPS.maxFixRounds) ? CAPS.maxFixRounds : 2
+// UI review runs only when the repo declares a renderable frontend (ui config
+// with a dev-server command) AND the change touches the app glob. The port is
+// the configured base plus an optional caller-supplied wave index so parallel
+// worktrees never bind the same port.
+const uiConfigured = !!(UI.devServerCmd && UI.appGlob)
+const uiPort = (Number.isInteger(UI.devServerPortBase) ? UI.devServerPortBase : 4100) + (Number.isInteger(A.waveIndex) ? A.waveIndex : 0)
 if (!T.key || !BASE) {
   return { error: 'autobuild requires args.config.base and args.ticket.key', got: { base: BASE, key: T.key } }
 }
@@ -35,6 +42,12 @@ const RULES = [
   `TDD is mandatory: failing test first, then implement. Match existing conventions.`,
   `Use these ticket commands (substitute placeholders): show="${(CFG.ticket||{}).show||''}", note="${(CFG.ticket||{}).note||''}", label="${(CFG.ticket||{}).label||''}".`,
   `git add ONLY the current chunk's files (never "git add -A").${noPush}`,
+  `DESTRUCTIVE-OPERATION GUARDRAIL (autonomous mode — you cannot ask a human, so never guess): ` +
+    `NEVER run a command that discards work or mutates state outside your chunk without first auditing the exact ramifications. Specifically forbidden unless you have inspected the full state and confirmed zero unintended loss: ` +
+    `(a) destructive git — git reset --hard, git checkout/restore that overwrites a modified file, git clean -fd, git stash drop, force branch deletion, or anything that drops uncommitted or unpushed work; prefer git reset --soft/--mixed, inspect git status + git stash list + git reflog first, and NEVER run any of these while unrelated dirty files are present in the tree. ` +
+    `(b) filesystem destruction — rm -rf, deleting untracked files, or overwriting/truncating any file you did not create or that lies OUTSIDE your assigned worktree. ` +
+    `(c) database / external mutation — destructive migrations (e.g. prisma migrate reset), dropping tables, destructive SQL, deleting cloud resources, or sending real emails/webhooks/payments. ` +
+    `If a task seems to require any of the above, STOP and surface it as a blocking finding (the supervisor will park it needs-human) — do not perform the operation. To undo your OWN just-made commit, use git reset --soft HEAD~1 inside the worktree, never --hard.`,
   PROFILE ? `Repo conventions:\n${PROFILE}` : '',
 ].filter(Boolean).join(' ')
 
@@ -67,18 +80,10 @@ const IMPLEMENT_SCHEMA = {
     committed: { type: 'boolean' },
   },
 }
-const DESIGN_SCHEMA = {
-  type: 'object', additionalProperties: false, required: ['spec', 'specPath', 'surface', 'chunks', 'escalations'],
-  properties: {
-    spec: { type: 'string' }, specPath: { type: 'string' },
-    surface: { type: 'array', items: { type: 'string' } },
-    chunks: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['id', 'title', 'model', 'files', 'instructions'],
-      properties: { id: { type: 'string' }, title: { type: 'string' }, model: { type: 'string', enum: ['haiku', 'sonnet', 'opus'] }, files: { type: 'array', items: { type: 'string' } }, instructions: { type: 'string' },
-        testExempt: { type: 'boolean' }, testExemptReason: { type: 'string' } } } },
-    escalations: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['decision', 'options', 'recommendation', 'rationale'],
-      properties: { decision: { type: 'string' }, options: { type: 'array', items: { type: 'string' } }, recommendation: { type: 'string' }, rationale: { type: 'string' } } } },
-  },
-}
+// Shared design-agent output contract, inlined at build time from
+// src/lib/designSchema.js (workflow bodies cannot require). Single source means
+// the engine and autodesign never validate against divergent shapes.
+const DESIGN_SCHEMA = /*__SCHEMA:design__*/
 
 const fill = (tpl, map) => tpl.replace(/\{(\w+)\}/g, (m, k) => (k in map ? map[k] : m))
 const ctx = { RULES, key: T.key, branch: T.branch, base: BASE, testCmd, lintCmd }
@@ -110,11 +115,19 @@ ctx.specPath = specPath
 // SETUP (create worktree, commit spec)
 phase('setup')
 const setup = await agent(
-  `${RULES}\n\nPrepare ${T.key}. git fetch origin. Create a fresh git WORKTREE for branch "${T.branch}" off "origin/${BASE}" (git worktree add -b ${T.branch} <path> origin/${BASE}). The approved design spec is at "${specPath}"; ensure it is committed on this branch. Run the install command if deps are missing. Return the absolute worktree path (worktreePath) and HEAD sha (headSha). Do NOT implement.`,
+  `${RULES}\n\nPrepare ${T.key}. Create a fresh git WORKTREE for branch "${T.branch}" off the LOCAL "${BASE}" branch (git worktree add -b ${T.branch} <path> ${BASE}). Fork off LOCAL ${BASE} — NOT origin/${BASE} — because the supervisor merges each finished ticket into local ${BASE} as the run progresses, so local ${BASE} is the freshest, most-compounded state; building off it lets this ticket's work compound on prior tickets and avoids same-file merge conflicts later. (The supervisor is responsible for bringing local ${BASE} up to date with origin once at run start; do not fetch/reset ${BASE} yourself.) The approved design spec was written to "${specPath}" but is NOT yet committed (it may be an uncommitted file in the current checkout, which the new worktree cannot see). Ensure the spec exists INSIDE the worktree at the same relative path (copy it in if absent) and commit it there on "${T.branch}" with message "docs(${T.key}): design spec" — use git -C <worktreePath> for every git command so nothing lands on the base branch. Run the install command if deps are missing. Return the absolute worktree path (worktreePath) and HEAD sha (headSha). Do NOT implement.`,
   { label: `${T.key} setup`, phase: 'setup', model: 'haiku', agentType: 'claude', schema: SETUP_SCHEMA }
 )
 
 if (!setup) return { key: T.key, branch: T.branch, specPath, verdict: 'blocked', findings: [{ issue: 'setup agent errored' }] }
+// All subsequent agents (implement/review/fix) operate INSIDE the worktree.
+// Thread its absolute path into the prompt context so every git command can be
+// scoped to it (git -C {worktreePath}); otherwise an agent that does not cd into
+// the worktree commits to the ambient branch (the base branch), leaking work.
+ctx.worktreePath = setup.worktreePath
+// UI-review context (consumed only when the UI reviewer runs).
+ctx.uiPort = uiPort
+ctx.devServerCmd = (UI.devServerCmd || '').replace('{port}', String(uiPort))
 
 // IMPLEMENT (sequential, model per chunk). Each chunk reports red→green
 // evidence; the engine gates on a real red phase so a non-discriminating test
@@ -149,23 +162,59 @@ for (const c of chunks) {
   }
 }
 
+// UI-TOUCH DETECTION: the rendered UI reviewer runs only when the repo declares
+// a renderable frontend (ui config) AND this change touches the app glob. The
+// workflow cannot run git itself, so a cheap agent reports the diff verdict once.
+let touchesUI = false
+if (uiConfigured) {
+  const det = await agent(
+    `${RULES}\n\nIn the worktree at "${setup.worktreePath}", run: git -C "${setup.worktreePath}" diff --name-only ${BASE}...${T.branch}. Does ANY changed path match the glob "${UI.appGlob}"? Answer strictly via the schema.`,
+    { label: `${T.key} ui-detect`, phase: 'review', model: 'haiku', agentType: 'claude', schema: { type: 'object', additionalProperties: false, required: ['touchesUI'], properties: { touchesUI: { type: 'boolean' } } } }
+  )
+  // Fail CLOSED: a null det means the detector errored, so we cannot prove the
+  // change is UI-free. Default to running the rendered review (every other
+  // reviewer fails closed too) rather than silently merging a UI change unseen.
+  touchesUI = det ? !!det.touchesUI : uiConfigured
+  if (!det) log(`${T.key}: ui-detect errored → running UI review anyway (fail-closed, port ${uiPort})`)
+  else if (touchesUI) log(`${T.key}: change touches ${UI.appGlob} → UI review enabled (port ${uiPort})`)
+}
+
 // REVIEW + FIX loop
 let round = 0, clean = false, lastBlocking = []
 while (round <= MAX_FIX_ROUNDS) {
   phase('review')
-  const [code, sec, conf] = await parallel([
-    () => agent(fill(/*__PROMPT:codeReview__*/, ctx), { label: `${T.key} code r${round}`, phase: 'review', model: 'opus', agentType: 'claude', schema: REVIEW_SCHEMA }),
-    () => agent(fill(/*__PROMPT:securityReview__*/, ctx), { label: `${T.key} sec r${round}`, phase: 'review', model: 'opus', agentType: 'claude', schema: REVIEW_SCHEMA }),
-    () => agent(fill(/*__PROMPT:designConformance__*/, ctx), { label: `${T.key} conf r${round}`, phase: 'review', model: 'opus', agentType: 'claude', schema: REVIEW_SCHEMA }),
-  ])
-  const allReturned = code && sec && conf
-  const blocking = [...((code && code.blocking) || []), ...((sec && sec.blocking) || []), ...((conf && conf.blocking) || [])]
-  lastBlocking = blocking
+  // Single source for the review set: each spec carries `name` (the human name
+  // used in the errored-reviewer backfill), `short` (the agent-label token), and
+  // its filled prompt. Deriving the backfill names from this same list means the
+  // errored-reviewer finding can never blame the wrong reviewer. Code/security/
+  // design-conformance always run; the rendered UI reviewer (Playwright, on the
+  // allocated port) is appended only for UI-touching changes. A reviewer that
+  // errors returns null → treated as NOT clean (never a silent pass).
+  const reviewerSpecs = [
+    { name: 'code', short: 'code', prompt: fill(/*__PROMPT:codeReview__*/, ctx) },
+    { name: 'security', short: 'sec', prompt: fill(/*__PROMPT:securityReview__*/, ctx) },
+    { name: 'design-conformance', short: 'conf', prompt: fill(/*__PROMPT:designConformance__*/, ctx) },
+  ]
+  if (touchesUI) reviewerSpecs.push({ name: 'ui', short: 'ui', prompt: fill(/*__PROMPT:uiReview__*/, ctx) })
+  const reviews = await parallel(reviewerSpecs.map((s) => () =>
+    agent(s.prompt, { label: `${T.key} ${s.short} r${round}`, phase: 'review', model: 'opus', agentType: 'claude', schema: REVIEW_SCHEMA })
+  ))
+  const allReturned = reviews.every(Boolean)
+  const blocking = reviews.flatMap((r) => (r && r.blocking) || [])
+  // A reviewer that ERRORED contributes nothing to `blocking`, so the run can be
+  // not-clean (allReturned false) with an empty blocking list. Backfill an
+  // actionable finding naming the missing reviewer (names come from the same
+  // reviewerSpecs list, so they cannot be misaligned with the reviews array).
+  const erroredReviewers = reviewerSpecs.filter((_s, i) => !reviews[i]).map((s) => s.name)
+  lastBlocking = blocking.length || allReturned ? blocking : erroredReviewers.map((n) => ({
+    severity: 'high', file: '', issue: `The ${n} reviewer did not return (agent errored), so this ticket could not be verified clean.`,
+    fix: `Re-run the build for ${T.key}; the ${n} review must complete before merge.`,
+  }))
   if (blocking.length === 0 && allReturned) { clean = true; break }
   if (round === MAX_FIX_ROUNDS) { log(`${T.key}: ${blocking.length} blocking after ${round} rounds (or a reviewer errored)`); break }
   phase('fix')
   await agent(
-    `${RULES}\n\nFix these BLOCKING review findings for ${T.key} on branch "${T.branch}", commit (relevant files only). Re-run the test and lint commands until green. Findings:\n${JSON.stringify(blocking, null, 2)}`,
+    `${RULES}\n\nFix these BLOCKING review findings for ${T.key} on branch "${T.branch}", working INSIDE the worktree at "${setup.worktreePath}" (cd there or use git -C "${setup.worktreePath}" for every git command — never commit from the base checkout). Commit relevant files only. Re-run the test and lint commands until green. Findings:\n${JSON.stringify(blocking, null, 2)}`,
     { label: `${T.key} fix r${round}`, phase: 'fix', model: 'opus', agentType: 'claude' }
   )
   round++

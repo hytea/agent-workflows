@@ -21,7 +21,7 @@
     "format":  "",
     "formatFix": ""
   },
-  "labels": { "ready": "ready-to-build", "parked": "needs-human" },
+  "labels": { "ready": "ready-to-build", "parked": "needs-human", "designed": "designed" },
   "ui": {
     "devServerPortBase": 4100,
     "appGlob": "apps/web/**",

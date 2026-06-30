@@ -1,6 +1,6 @@
 {RULES}
 
-Implement ONE chunk of {key} on branch "{branch}" inside the assigned worktree. Do NOT switch branches. First READ the approved design spec at "{specPath}" — it is authoritative.
+Implement ONE chunk of {key} on branch "{branch}" inside the assigned worktree at "{worktreePath}". Do NOT switch branches. Run EVERY git, test, and lint command from inside that worktree: cd "{worktreePath}" first (or pass git -C "{worktreePath}" to every git command). Never run git from any other directory — committing outside the worktree leaks the change onto the base branch. First READ the approved design spec at "{specPath}" — it is authoritative.
 
 CHUNK {chunkId} — {chunkTitle}
 Target files: {chunkFiles}
@@ -13,6 +13,6 @@ TDD is MANDATORY and ENFORCED — follow this exact red→green protocol. A test
 
 2. GREEN. Now write the implementation. Run the test command again and observe it PASS. Run the lint command ({lintCmd}); fix only what you touched until both pass. Record the exit codes (both 0).
 
-3. COMMIT. git add ONLY this chunk's files (never "git add -A") and commit with a conventional message referencing {key} and "{chunkId}".
+3. COMMIT. From inside the worktree ("{worktreePath}"), git add ONLY this chunk's files (never "git add -A") and commit with a conventional message referencing {key} and "{chunkId}". Verify with git -C "{worktreePath}" log -1 that the commit landed on "{branch}", NOT on the base branch.
 
 Return a structured report with: the test file path; the red-phase command, its exit code (MUST be non-zero), and the failing assertion text you saw; the green-phase command and its exit code (0); and the lint exit code. Be truthful about the red phase — fabricated red evidence is worse than an honest escalation.

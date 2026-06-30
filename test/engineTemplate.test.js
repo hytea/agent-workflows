@@ -39,3 +39,23 @@ test('template lets a chunk opt out of the TDD gate when genuinely non-testable'
   assert.match(src, /testExempt/, 'must honor a per-chunk testExempt flag')
   assert.match(src, /gateChunk = haveTestCmd && !c\.testExempt/, 'gate must skip exempt chunks')
 })
+
+test('UI-touch detection fails CLOSED when the detector errors', () => {
+  // If the cheap ui-detect agent errors (returns null), the engine must NOT
+  // silently skip the rendered UI review (fail-open). Like every other reviewer,
+  // an unknown UI verdict must err toward running the review, not merging blind.
+  assert.match(
+    src,
+    /touchesUI = det \? !!det\.touchesUI : uiConfigured/,
+    'errored UI detection must default to running the UI review when UI is configured'
+  )
+})
+
+test('a blocked verdict from an errored reviewer carries an actionable finding', () => {
+  // When reviewers all return clean blocking lists but one ERRORED (null), the
+  // run is not clean yet lastBlocking is empty. The final verdict must not be
+  // "blocked" with findings:[] — a human parking it needs a reason. The engine
+  // must synthesize a finding describing the errored reviewer.
+  assert.match(src, /reviewer (errored|did not return)/i, 'must explain an errored-reviewer block')
+  assert.match(src, /lastBlocking = blocking\.length/, 'must backfill an explanatory finding when blocking is empty but not clean')
+})

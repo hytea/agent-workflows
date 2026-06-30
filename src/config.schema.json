@@ -61,10 +61,11 @@
     "labels": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["ready", "parked"],
+      "required": ["ready", "parked", "designed"],
       "properties": {
-        "ready":  { "type": "string", "description": "Tag marking a ticket ready for autonomous build." },
-        "parked": { "type": "string", "description": "Tag the supervisor applies when parking a ticket for human attention." }
+        "ready":   { "type": "string", "description": "Tag marking a ticket ready for autonomous build." },
+        "parked":  { "type": "string", "description": "Tag the supervisor applies when parking a ticket for human attention." },
+        "designed": { "type": "string", "description": "Tag marking a ticket whose design is cached and ready to build without re-designing." }
       }
     },
     "ui": {

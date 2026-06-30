@@ -8,6 +8,7 @@ const FILES = {
   codeReview: 'code-review.md',
   securityReview: 'security-review.md',
   designConformance: 'design-conformance.md',
+  uiReview: 'ui-review.md',
 }
 
 function loadPrompts() {
