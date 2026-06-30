@@ -1,6 +1,6 @@
 'use strict'
 
-// Classify `gh pr checks <branch> --json bucket,state,name` output into one
+// Classify `gh pr checks <branch> --json bucket,name` output into one
 // verdict the autobuild-issue EM supervisor branches on. Pure + total: malformed
 // input never throws.
 //
