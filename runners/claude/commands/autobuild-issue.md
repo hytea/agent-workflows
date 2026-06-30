@@ -33,8 +33,12 @@ Unlike `/autobuild-one` (interactive, stops at the local branch) and `/autobuild
 
 7. **Drive CI to green.** Poll the PR's checks, classifying them with the shipped `ciStatus` helper. The categorizer is gh's `bucket` field — request `--json bucket,name` (the classifier reads only those two). CRITICAL: `gh pr checks` exits NON-ZERO when checks are pending (exit 8) or failing (exit 1) while STILL writing valid JSON to stdout, so you must capture stdout regardless of exit code and must NOT collapse a non-zero exit to `[]` (that would mask the very states you are polling for). Run:
    ```
-   export PLUGIN BRANCH        # MUST export — the `node -e` child reads process.env.PLUGIN / process.env.BRANCH
-   BRANCH=<build branch>; export BRANCH
+   # Assign BOTH here, then export — the `node -e` child reads them from process.env.
+   # PLUGIN was resolved in Step 1's shell; re-resolve it here (a separate shell does
+   # NOT inherit it) so the block is self-contained:
+   PLUGIN="$(cd "$(dirname "$0")/.." && pwd)"   # or the absolute path found in Step 1
+   BRANCH=<build branch>
+   export PLUGIN BRANCH
    node -e "
      const { summarize } = require(process.env.PLUGIN + '/lib/ciStatus');
      const { execFileSync } = require('child_process');
@@ -53,7 +57,6 @@ Unlike `/autobuild-one` (interactive, stops at the local branch) and `/autobuild
      console.log(JSON.stringify(verdict));
    "
    ```
-   Resolve `PLUGIN` (Step 1) and `BRANCH` (the build branch) and **export both** before the `node -e` child runs — they are read from `process.env`, so a non-exported shell var is invisible to the child and the poll would `require(undefined + '/lib/ciStatus')`.
    `summarize` returns `{ state: 'passing' | 'failing' | 'pending' | 'none' | 'unknown', pending, failing[] }`. The empty-stdout cases are disambiguated above by gh's stderr: a "no checks" message → `none`; anything else (notably "no pull requests found") → `unknown` (do not declare ready). If a future gh rewords the no-checks message so this misfires, the failure is SAFE — it yields `unknown`, which stops and reports rather than declaring a phantom-green PR ready.
    - `state: 'passing'`: CI is green → Step 9.
    - `state: 'none'` (gh reported no checks): this can mean "the repo has no CI" OR "the required workflows have not registered yet" (a freshly pushed branch, a check queued behind an approval gate). Do NOT immediately declare ready on the first `none` after pushing — that would merge a PR whose CI never ran. Re-poll across a short settle window (e.g. a few polls over ~1–2 minutes); only if it stays `none` for the whole window treat CI as genuinely absent → Step 9. If any later poll flips to `pending`/`failing`/`passing`, follow that instead.
