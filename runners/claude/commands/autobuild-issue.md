@@ -30,31 +30,31 @@ Unlike `/autobuild-one` (interactive, stops at the local branch) and `/autobuild
    ```
    Generate the PR body from the spec and the engine's review summary (what was built, how it was verified). If a PR for the branch already exists (re-run), reuse it (`gh pr view <branch>`) instead of creating a duplicate.
 
-7. **Drive CI to green.** Poll the PR's checks, classifying them with the shipped `ciStatus` helper. The categorizer is gh's `bucket` field — request `--json bucket,state,name`. CRITICAL: `gh pr checks` exits NON-ZERO when checks are pending (exit 8) or failing (exit 1) while STILL writing valid JSON to stdout, so you must capture stdout regardless of exit code and must NOT collapse a non-zero exit to `[]` (that would mask the very states you are polling for). Run:
+7. **Drive CI to green.** Poll the PR's checks, classifying them with the shipped `ciStatus` helper. The categorizer is gh's `bucket` field — request `--json bucket,name` (the classifier reads only those two). CRITICAL: `gh pr checks` exits NON-ZERO when checks are pending (exit 8) or failing (exit 1) while STILL writing valid JSON to stdout, so you must capture stdout regardless of exit code and must NOT collapse a non-zero exit to `[]` (that would mask the very states you are polling for). Run:
    ```
    BRANCH=<build branch>
    node -e "
      const { summarize } = require(process.env.PLUGIN + '/lib/ciStatus');
      const { execFileSync } = require('child_process');
      let out = '', err = '';
-     try { out = execFileSync('gh', ['pr','checks', process.env.BRANCH, '--json','bucket,state,name'], { encoding: 'utf8' }); }
+     try { out = execFileSync('gh', ['pr','checks', process.env.BRANCH, '--json','bucket,name'], { encoding: 'utf8' }); }
      catch (e) { out = (e.stdout || '').toString(); err = (e.stderr || '').toString(); }  // gh exits 8/1 with JSON still on stdout
      let verdict;
      if (out.trim()) {
        let checks; try { checks = JSON.parse(out); } catch (_e) { checks = null; }  // bad JSON => unknown
        verdict = summarize(checks);
-     } else if (/no checks reported/i.test(err)) {
-       verdict = { state: 'none', pending: 0, failing: [] };   // genuinely no CI on this repo
+     } else if (/no checks/i.test(err)) {
+       verdict = { state: 'none', pending: 0, failing: [] };   // gh: 'no checks reported on the <branch> branch' => genuinely no CI
      } else {
-       verdict = { state: 'unknown', pending: 0, failing: [] }; // could not read checks (auth/network/no PR)
+       verdict = { state: 'unknown', pending: 0, failing: [] }; // empty + any other message (e.g. 'no pull requests found') => could not read checks
      }
      console.log(JSON.stringify(verdict));
    "
    ```
-   `summarize` returns `{ state: 'passing' | 'failing' | 'pending' | 'none' | 'unknown', pending, failing[] }`. The empty-stdout cases are disambiguated above: gh's "no checks reported" message → `none` (proceed), any other read failure → `unknown` (do not declare ready).
+   `summarize` returns `{ state: 'passing' | 'failing' | 'pending' | 'none' | 'unknown', pending, failing[] }`. The empty-stdout cases are disambiguated above by gh's stderr: a "no checks" message → `none` (proceed); anything else (notably "no pull requests found") → `unknown` (do not declare ready). If a future gh rewords the no-checks message so this misfires, the failure is SAFE — it yields `unknown`, which stops and reports rather than declaring a phantom-green PR ready.
    - `state: 'passing'`: CI is green → Step 9.
    - `state: 'none'` (the checks list was empty — no CI configured on the repo): treat CI as satisfied → Step 9.
-   - `state: 'pending'`: checks still running. Wait and re-poll on a sensible interval (do not busy-loop).
+   - `state: 'pending'`: checks still running. Wait and re-poll on a sensible interval (do not busy-loop). Bound the total wait — a check can stay pending forever (an offline self-hosted runner, a workflow blocked on a never-granted environment approval). Cap pending polling at a reasonable deadline (e.g. ~30 minutes of wall-clock, or whatever the repo's CI realistically needs); if it is still pending past the deadline, **report only** (surface that CI never concluded and the PR URL) and stop, rather than looping indefinitely.
    - `state: 'failing'`: go to Step 8.
    - `state: 'unknown'` (could NOT read checks — gh auth/network error, no PR, unparseable output): do NOT treat as success. Retry a couple of times; if it persists, **report only** (surface that CI status could not be determined and the PR URL) and stop. A PR is never declared ready on an undetermined CI state.
 

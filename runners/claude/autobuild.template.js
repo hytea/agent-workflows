@@ -183,14 +183,13 @@ if (uiConfigured) {
 let round = 0, clean = false, lastBlocking = []
 while (round <= MAX_FIX_ROUNDS) {
   phase('review')
-  // Code/security/design-conformance always run. The rendered UI reviewer is
-  // appended only for UI-touching changes; it renders the page via Playwright
-  // on the allocated port. A reviewer that errors returns null → treated as
-  // NOT clean (never a silent pass).
-  // Single source for the review set: each spec carries its name (used for both
-  // the agent label and the errored-reviewer backfill, so the two can never
-  // drift) and its filled prompt. The rendered UI reviewer is included only for
-  // UI-touching changes. A reviewer that errors returns null → NOT clean.
+  // Single source for the review set: each spec carries `name` (the human name
+  // used in the errored-reviewer backfill), `short` (the agent-label token), and
+  // its filled prompt. Deriving the backfill names from this same list means the
+  // errored-reviewer finding can never blame the wrong reviewer. Code/security/
+  // design-conformance always run; the rendered UI reviewer (Playwright, on the
+  // allocated port) is appended only for UI-touching changes. A reviewer that
+  // errors returns null → treated as NOT clean (never a silent pass).
   const reviewerSpecs = [
     { name: 'code', short: 'code', prompt: fill(/*__PROMPT:codeReview__*/, ctx) },
     { name: 'security', short: 'sec', prompt: fill(/*__PROMPT:securityReview__*/, ctx) },
